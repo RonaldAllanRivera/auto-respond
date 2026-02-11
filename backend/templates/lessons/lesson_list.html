@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Lessons</h1>
+
+  <p><a href="/lessons/new/">Create lesson</a></p>
+
+  <ul>
+    {% for lesson in lessons %}
+      <li>
+        <a href="/lessons/{{ lesson.id }}/">{{ lesson.title }}</a>
+        ({{ lesson.source }})
+      </li>
+    {% empty %}
+      <li>No lessons yet.</li>
+    {% endfor %}
+  </ul>
+{% endblock %}

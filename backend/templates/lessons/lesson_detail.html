@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>{{ lesson.title }}</h1>
+
+  <p>
+    <strong>Source:</strong> {{ lesson.source }}
+    <br />
+    <strong>Meeting code:</strong> {{ lesson.meeting_code|default:"-" }}
+  </p>
+
+  <h2>Transcript</h2>
+  <div>
+    {% for chunk in chunks %}
+      <p>
+        {% if chunk.speaker %}<strong>{{ chunk.speaker }}:</strong>{% endif %}
+        {{ chunk.text }}
+      </p>
+    {% empty %}
+      <p>No transcript chunks yet.</p>
+    {% endfor %}
+  </div>
+
+  <h2>Recent Q&A</h2>
+  <div>
+    {% for qa in qas %}
+      <div>
+        <p><strong>Q:</strong> {{ qa.question }}</p>
+        <p><strong>A:</strong> {{ qa.answer }}</p>
+      </div>
+      <hr />
+    {% empty %}
+      <p>No questions asked yet.</p>
+    {% endfor %}
+  </div>
+{% endblock %}
