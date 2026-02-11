@@ -9,12 +9,19 @@ Copy `.env.example` to `.env` and set values.
 Required for running the backend locally:
 
 - `DJANGO_SECRET_KEY`
+
+Recommended (required once AI answering is enabled):
+
 - `OPENAI_API_KEY`
 
 Recommended for local dev:
 
 - `DJANGO_DEBUG=1`
 - `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1`
+
+Recommended for device pairing:
+
+- `DEVICE_TOKEN_SECRET`
 
 Database variables (Docker Compose defaults are provided):
 

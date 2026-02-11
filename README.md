@@ -4,8 +4,8 @@ A production-minded **Django SaaS** that turns **Google Meet live captions** int
 
 This repository is organized as a **single monorepo**:
 
-- `backend/`: Django (web UI + API), Postgres integration, Stripe webhooks
-- `extension/`: Chrome Extension (MV3) that reads Google Meet captions from the DOM
+- `backend/`: Django (accounts/billing/devices/lessons), Postgres integration, admin CMS models
+- `extension/`: Chrome Extension (MV3) scaffold with pairing-code configuration (device pairing planned)
 
 ## Product overview
 
@@ -29,13 +29,14 @@ See `PLAN.md` for the full phased roadmap.
 
 ## Current implementation status
 
-The codebase currently contains an early scaffold for:
+The codebase currently contains a **fresh SaaS-first scaffold** for:
 
-- Django backend (web UI + API)
-- Chrome extension (MV3)
-- Docker Compose local development stack
+- Django backend with multi-tenant-ready data model (`accounts`, `billing`, `devices`, `lessons`)
+- Django Admin registrations for core CMS models (pricing plan, coupons, devices, lessons)
+- Chrome extension skeleton with an options page to store a pairing code
+- Docker Compose local development stack (Django + Postgres)
 
-The authentication and billing layers will be refactored to the SaaS model in `PLAN.md` (Google login, Stripe checkout/webhooks, extension pairing).
+Google OAuth, Stripe checkout/webhooks, device pairing endpoints, and caption ingestion are planned next (see `PLAN.md`).
 
 ## Local development (Ubuntu + Docker Desktop)
 
@@ -45,6 +46,22 @@ Create a `.env` in the repo root (copy from `.env.example`) and set at minimum:
 
 - `DJANGO_SECRET_KEY`
 - `OPENAI_API_KEY`
+
+Set a device-token signing secret (used for the planned device pairing flow):
+
+- Add `DEVICE_TOKEN_SECRET` to `.env`.
+- Generate a strong value:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+- Restart Docker so Compose reloads the env file:
+
+```bash
+docker compose down
+docker compose up --build
+```
 
 ### 2) Start services
 

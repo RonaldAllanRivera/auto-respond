@@ -14,7 +14,7 @@ Target deployment:
 
 - **Render** for Django Web Service
 - **Render Postgres** for database
-- **Stripe** for subscriptions (daily/weekly/monthly) + coupon codes
+- **Stripe** for subscriptions (monthly) + coupon codes
 
 ## 2) Security & configuration principles
 
@@ -154,7 +154,7 @@ Use Django Admin as the primary CMS:
 
 ## 10) Phased implementation plan
 
-### Phase 0 — Repo hygiene & foundations
+### Phase 0 — Repo hygiene & foundations (Completed)
 - Lock monorepo structure (`backend/`, `extension/`)
 - Baseline CI checks (format/lint optional)
 - Environment variable contract documented
@@ -164,7 +164,7 @@ Use Django Admin as the primary CMS:
 - Subscriber profile + settings (grade level, max sentences)
 - Basic dashboard pages (templates)
 
-### Phase 2 — Stripe subscriptions (daily/weekly/monthly)
+### Phase 2 — Stripe subscriptions (monthly)
 - Stripe Checkout Session creation
 - Stripe webhook handler + subscription sync
 - Entitlement checks on caption ingest and answering
