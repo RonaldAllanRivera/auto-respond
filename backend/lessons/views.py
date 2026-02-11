@@ -18,7 +18,7 @@ from .models import AppSettings, Install, Lesson, QuestionAnswer, TranscriptChun
 def _add_cors_headers(response: JsonResponse) -> JsonResponse:
     response["Access-Control-Allow-Origin"] = "*"
     response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Family-Key"
+    response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Extension-Key, X-Family-Key"
     return response
 
 
@@ -100,16 +100,16 @@ def settings_view(request: HttpRequest) -> HttpResponse:
     return render(request, "lessons/settings.html", {"form": form})
 
 
-def _require_family_key(request: HttpRequest) -> bool:
-    expected = settings.FAMILY_ACCESS_KEY
+def _require_extension_bootstrap_key(request: HttpRequest) -> bool:
+    expected = getattr(settings, "EXTENSION_BOOTSTRAP_KEY", "")
     if not expected:
-        return True
-    provided = request.headers.get("X-Family-Key", "")
+        return bool(getattr(settings, "DEBUG", False))
+    provided = request.headers.get("X-Extension-Key") or request.headers.get("X-Family-Key", "")
     return provided == expected
 
 
 def _issue_install_token(install: Install) -> str:
-    secret = settings.AUTH_TOKEN_SECRET
+    secret = getattr(settings, "EXTENSION_TOKEN_SECRET", "")
     payload = {
         "install_id": str(install.id),
         "iat": int(time.time()),
@@ -124,7 +124,7 @@ def _verify_install_token(request: HttpRequest) -> Install | None:
         return None
     token = auth.removeprefix("Bearer ").strip()
 
-    secret = settings.AUTH_TOKEN_SECRET
+    secret = getattr(settings, "EXTENSION_TOKEN_SECRET", "")
     if not secret:
         return None
 
@@ -154,8 +154,11 @@ def api_install(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return _add_cors_headers(JsonResponse({"error": "method_not_allowed"}, status=405))
 
-    if not _require_family_key(request):
+    if not _require_extension_bootstrap_key(request):
         return _add_cors_headers(JsonResponse({"error": "unauthorized"}, status=401))
+
+    if not getattr(settings, "EXTENSION_TOKEN_SECRET", ""):
+        return _add_cors_headers(JsonResponse({"error": "server_misconfigured"}, status=500))
 
     body = {}
     if request.body:
@@ -198,7 +201,7 @@ def api_captions_ingest(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return _add_cors_headers(JsonResponse({"error": "method_not_allowed"}, status=405))
 
-    if not _require_family_key(request):
+    if not _require_extension_bootstrap_key(request):
         return _add_cors_headers(JsonResponse({"error": "unauthorized"}, status=401))
 
     if _verify_install_token(request) is None:
@@ -297,7 +300,7 @@ def api_answer(request: HttpRequest) -> JsonResponse:
     if request.method != "POST":
         return _add_cors_headers(JsonResponse({"error": "method_not_allowed"}, status=405))
 
-    if not _require_family_key(request):
+    if not _require_extension_bootstrap_key(request):
         return _add_cors_headers(JsonResponse({"error": "unauthorized"}, status=401))
 
     if _verify_install_token(request) is None:

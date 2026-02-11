@@ -18,10 +18,11 @@ This repository is organized as a **single monorepo**:
 
 - **Authentication**: Google OAuth for subscribers
 - **Billing**: Stripe subscriptions
-  - Daily / weekly / monthly plans
+  - Monthly plan (weekly/daily shown as computed equivalents for display)
   - Coupon codes (admin-managed)
 - **Multi-tenant data isolation**: all lesson data is scoped to the authenticated user
 - **Admin CMS** (owner): manage users, subscriptions, devices, and coupon codes
+- **Pricing CMS** (owner): manage monthly plan config (Stripe Price ID + discount) in Django Admin
 - **Deployment**: Render + Render Postgres
 
 See `PLAN.md` for the full phased roadmap.

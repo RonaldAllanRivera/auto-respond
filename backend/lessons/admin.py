@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AppSettings, Install, Lesson, QuestionAnswer, TranscriptChunk
+from .models import AppSettings, BillingPlan, Install, Lesson, QuestionAnswer, TranscriptChunk
 
 
 @admin.register(Lesson)
@@ -32,3 +32,18 @@ class AppSettingsAdmin(admin.ModelAdmin):
 class InstallAdmin(admin.ModelAdmin):
     list_display = ("id", "label", "created_at", "last_seen_at")
     search_fields = ("label",)
+
+
+@admin.register(BillingPlan)
+class BillingPlanAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "name",
+        "currency",
+        "monthly_price_cents",
+        "monthly_discount_percent",
+        "stripe_monthly_price_id",
+        "active",
+        "updated_at",
+    )
+    list_filter = ("active", "currency")

@@ -58,7 +58,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const res = await postJson(
       url,
       {
-        'X-Family-Key': cfg.familyAccessKey,
+        'X-Extension-Key': cfg.familyAccessKey,
         'Authorization': 'Bearer ' + cfg.installToken
       },
       payload

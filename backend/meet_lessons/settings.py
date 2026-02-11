@@ -75,8 +75,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-FAMILY_ACCESS_KEY = os.environ.get("FAMILY_ACCESS_KEY", "")
-AUTH_TOKEN_SECRET = os.environ.get("AUTH_TOKEN_SECRET", "")
+EXTENSION_BOOTSTRAP_KEY = os.environ.get("EXTENSION_BOOTSTRAP_KEY", os.environ.get("FAMILY_ACCESS_KEY", ""))
+EXTENSION_TOKEN_SECRET = os.environ.get("EXTENSION_TOKEN_SECRET", os.environ.get("AUTH_TOKEN_SECRET", ""))
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")

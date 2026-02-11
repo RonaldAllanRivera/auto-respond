@@ -26,7 +26,7 @@ async function refreshInstallToken() {
   const cfg = await getConfig();
 
   if (!cfg.backendBaseUrl || !cfg.familyAccessKey) {
-    await setStatus('Set backend URL and family access key first.');
+    await setStatus('Set backend URL and extension bootstrap key first.');
     return;
   }
 
@@ -35,7 +35,7 @@ async function refreshInstallToken() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Family-Key': cfg.familyAccessKey
+      'X-Extension-Key': cfg.familyAccessKey
     },
     body: JSON.stringify({ label: cfg.installLabel || '' })
   });

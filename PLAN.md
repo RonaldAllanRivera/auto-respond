@@ -50,17 +50,17 @@ Target deployment:
 - Backend issues a device credential (refresh token / device token).
 - Extension uses that credential to obtain short-lived access tokens.
 
-## 5) Stripe billing (daily/weekly/monthly)
+## 5) Stripe billing (monthly subscription)
 
-### 5.1 Products & Prices
-- Create three Stripe Prices:
-  - Daily subscription
-  - Weekly subscription
+### 5.1 Product & Price
+- Create a single Stripe Price:
   - Monthly subscription
+
+We will compute “equivalent” weekly/daily pricing for display/marketing only (no separate weekly/daily subscriptions).
 
 ### 5.2 Checkout flow
 - Subscriber clicks “Upgrade” in dashboard.
-- Backend creates a Stripe Checkout Session for the selected plan.
+- Backend creates a Stripe Checkout Session for the Monthly plan.
 - After payment, Stripe redirects back to the dashboard.
 
 ### 5.3 Webhooks (source of truth)
@@ -86,6 +86,16 @@ Recommended approach:
   - `active`, `max_redemptions`, `expires_at`
 - Admin can create/disable coupon codes in Django Admin.
 - At checkout creation time, backend applies the promotion code if valid.
+
+### 5.5 Pricing CMS (Admin)
+
+- Add a `BillingPlan` model managed in Django Admin that stores:
+  - Monthly price (cents)
+  - Monthly discount percent (default: 20%)
+  - Stripe Price ID (monthly)
+- Backend uses this model to:
+  - render pricing on the subscriber dashboard
+  - attach the correct Stripe Price ID during Checkout
 
 ## 6) Data model (multi-tenant)
 
