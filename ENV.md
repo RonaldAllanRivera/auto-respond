@@ -58,9 +58,6 @@ Pricing notes:
 
 ## Current scaffold security variables
 
-The current scaffold uses a shared-key + token approach for extension-to-backend requests:
+The scaffold uses **device pairing + server-issued device tokens** for extension-to-backend requests.
 
-- `EXTENSION_BOOTSTRAP_KEY`
-- `EXTENSION_TOKEN_SECRET`
-
-In the SaaS phases, this will be replaced by extension device pairing and server-issued device tokens.
+- `DEVICE_TOKEN_SECRET`

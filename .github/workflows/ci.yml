@@ -47,8 +47,7 @@ jobs:
           POSTGRES_PASSWORD: meet_lessons
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PORT: '5432'
-          EXTENSION_BOOTSTRAP_KEY: ''
-          EXTENSION_TOKEN_SECRET: ci-token-secret
+          DEVICE_TOKEN_SECRET: ci-token-secret
           OPENAI_API_KEY: ''
         run: |
           python -m compileall backend

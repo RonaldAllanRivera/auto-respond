@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Meet Lessons",
+  "version": "0.1.0",
+  "description": "Capture Google Meet captions and send them to Meet Lessons.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://localhost:8000/*", "https://*/"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
