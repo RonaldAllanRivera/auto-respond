@@ -8,6 +8,15 @@
   <body>
     <nav>
       <a href="/">Lessons</a>
+      {% if user.is_authenticated %}
+        <a href="/settings/">Settings</a>
+        <form method="post" action="/accounts/logout/" style="display:inline;">
+          {% csrf_token %}
+          <button type="submit">Logout</button>
+        </form>
+      {% else %}
+        <a href="/accounts/login/">Login</a>
+      {% endif %}
     </nav>
     {% block content %}{% endblock %}
   </body>

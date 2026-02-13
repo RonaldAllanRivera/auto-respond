@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Lessons</h1>
+
+  {% if lessons %}
+    <ul>
+      {% for l in lessons %}
+        <li>{{ l.title }} ({{ l.created_at }})</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No lessons yet.</p>
+  {% endif %}
+{% endblock %}

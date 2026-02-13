@@ -63,6 +63,68 @@ docker compose down
 docker compose up --build
 ```
 
+Set a strong Django secret key (required):
+
+- Add `DJANGO_SECRET_KEY` to `.env`.
+- Generate a strong value:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+- Restart Docker so Compose reloads the env file:
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+### 1.1) Google OAuth setup (get `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`)
+
+This project uses **django-allauth**. Google OAuth is optional for local development (you can still use `createsuperuser`), but required for the SaaS login flow.
+
+1) Create an OAuth Client in Google Cloud
+
+- Go to the Google Cloud Console: `https://console.cloud.google.com/`
+- Create or select a project.
+- Go to **APIs & Services**
+  - **OAuth consent screen**
+    - Choose **External** (or Internal if you’re on Google Workspace)
+    - Fill in the app name + support email
+    - Add yourself as a **Test user** (while the app is in testing)
+  - **Credentials** -> **Create Credentials** -> **OAuth client ID**
+    - Application type: **Web application**
+
+2) Configure origins + redirect URIs
+
+For local dev:
+
+- Authorized JavaScript origins:
+  - `http://localhost:8000`
+- Authorized redirect URIs:
+  - `http://localhost:8000/accounts/google/login/callback/`
+
+For production, add the same two entries using your Render domain (HTTPS), e.g.
+
+- `https://YOUR-SERVICE.onrender.com`
+- `https://YOUR-SERVICE.onrender.com/accounts/google/login/callback/`
+
+3) Copy the credentials into `.env`
+
+Copy the **Client ID** and **Client secret** values into your repo-root `.env`:
+
+- `GOOGLE_CLIENT_ID=...`
+- `GOOGLE_CLIENT_SECRET=...`
+
+4) Set Django Sites domain (required by allauth)
+
+In Django Admin:
+
+- Go to `http://localhost:8000/admin/sites/site/`
+- Edit site `id=1`
+  - Domain: `localhost:8000`
+  - Display name: anything (e.g. `Localhost`)
+
 ### 2) Start services
 
 ```bash
@@ -86,12 +148,61 @@ Open:
 - Web UI: `http://localhost:8000/`
 - Admin: `http://localhost:8000/admin/`
 
+Admin login notes:
+
+- There are no default admin credentials.
+- Use the username/email and password you set when running `createsuperuser`.
+
+### 1.2) Django Admin setup
+
+1) Log in to Admin
+
+- Visit `http://localhost:8000/admin/`
+- Log in with the superuser you created.
+
+2) Configure the Sites framework (required by allauth)
+
+- Go to `Sites` → `Sites` in Admin (`/admin/sites/site/`)
+- Edit the site with `id=1`:
+  - Domain: `localhost:8000`
+  - Display name: `Localhost`
+
+3) (Optional) Configure Google Social Application in Admin
+
+If you are NOT setting `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env`, you can configure them via Admin instead:
+
+- Go to `Social Accounts` → `Social applications`
+- Add a new app:
+  - Provider: `Google`
+  - Name: e.g. `Local Google`
+  - Client id / Secret: paste from Google Cloud
+  - Add `Site`: select `Localhost (localhost:8000)` and save
+
+4) Manage pricing and coupons
+
+- Billing Plan: `Billing → Billing plans` (store Stripe Monthly Price ID and discount)
+- Coupons: `Billing → Coupon codes`
+
 ## Chrome Extension (Ubuntu + Windows 11)
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked**
 4. Select the `extension/` folder
+
+## How to set up admin
+
+- Create a superuser
+
+```bash
+docker compose run --rm web python manage.py createsuperuser
+```
+
+- Log in
+  - Go to `http://localhost:8000/admin/`
+  - Use the username/email and password you set in the previous step
+
+This is also documented above under the Local development section.
 
 ## Engineering highlights (portfolio)
 

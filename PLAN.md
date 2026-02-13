@@ -159,7 +159,7 @@ Use Django Admin as the primary CMS:
 - Baseline CI checks (format/lint optional)
 - Environment variable contract documented
 
-### Phase 1 — Multi-tenant accounts + dashboard shell
+### Phase 1 — Multi-tenant accounts + dashboard shell (Completed)
 - Google OAuth login
 - Subscriber profile + settings (grade level, max sentences)
 - Basic dashboard pages (templates)
