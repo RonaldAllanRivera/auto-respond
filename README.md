@@ -29,6 +29,8 @@ See `PLAN.md` for the full phased roadmap.
 
 ## Current implementation status
 
+Phase 1 (Multi-tenant accounts + dashboard shell) — Completed and verified.
+
 The codebase currently contains a **fresh SaaS-first scaffold** for:
 
 - Django backend with multi-tenant-ready data model (`accounts`, `billing`, `devices`, `lessons`)
@@ -36,7 +38,7 @@ The codebase currently contains a **fresh SaaS-first scaffold** for:
 - Chrome extension skeleton with an options page to store a pairing code
 - Docker Compose local development stack (Django + Postgres)
 
-Google OAuth, Stripe checkout/webhooks, device pairing endpoints, and caption ingestion are planned next (see `PLAN.md`).
+Google OAuth is implemented. Stripe checkout/webhooks, device pairing endpoints, and caption ingestion are planned next (see `PLAN.md`).
 
 ## Local development (Ubuntu + Docker Desktop)
 
@@ -118,12 +120,13 @@ Copy the **Client ID** and **Client secret** values into your repo-root `.env`:
 
 4) Set Django Sites domain (required by allauth)
 
-In Django Admin:
+This is handled automatically by the `seed_site` management command which runs on container start. It sets Site 1 to `localhost:8000`.
 
-- Go to `http://localhost:8000/admin/sites/site/`
-- Edit site `id=1`
-  - Domain: `localhost:8000`
-  - Display name: anything (e.g. `Localhost`)
+For production, override with:
+
+```bash
+docker compose run --rm web python manage.py seed_site --domain=YOUR-SERVICE.onrender.com --name="Production"
+```
 
 ### 2) Start services
 
@@ -131,11 +134,7 @@ In Django Admin:
 docker compose up --build
 ```
 
-Then run migrations:
-
-```bash
-docker compose run --rm web python manage.py migrate
-```
+The container automatically runs `migrate`, `collectstatic`, and `seed_site` on startup.
 
 Create an admin user:
 
@@ -162,10 +161,16 @@ Admin login notes:
 
 2) Configure the Sites framework (required by allauth)
 
+This is auto-seeded on container start (`seed_site` command). To verify or change:
+
 - Go to `Sites` → `Sites` in Admin (`/admin/sites/site/`)
-- Edit the site with `id=1`:
-  - Domain: `localhost:8000`
-  - Display name: `Localhost`
+- Site 1 should already have domain `localhost:8000`
+
+For production, run:
+
+```bash
+python manage.py seed_site --domain=YOUR-SERVICE.onrender.com --name="Production"
+```
 
 3) (Optional) Configure Google Social Application in Admin
 

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex min-h-[calc(100vh-64px)] items-center justify-center">
+  <div class="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-lg text-center">
+
+    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+      <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+      </svg>
+    </div>
+
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">Login cancelled</h1>
+      <p class="mt-2 text-sm text-slate-500">You cancelled the sign-in process. No worries — you can try again whenever you're ready.</p>
+    </div>
+
+    <div class="space-y-3">
+      <a href="{% url 'account_login' %}"
+         class="block w-full rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm transition hover:bg-slate-800">
+        Back to login
+      </a>
+      <a href="/"
+         class="block w-full rounded-lg border border-slate-300 px-4 py-2.5 text-center text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">
+        Go to homepage
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

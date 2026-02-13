@@ -23,6 +23,10 @@ Recommended for device pairing:
 
 - `DEVICE_TOKEN_SECRET`
 
+## Static files
+
+Static assets are served via WhiteNoise in the container. No additional environment variables are required.
+
 Database variables (Docker Compose defaults are provided):
 
 - `POSTGRES_DB`
@@ -52,6 +56,10 @@ You should also configure database variables from Render Postgres.
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+
+Notes:
+
+- See README.md for required redirect URI(s) and the Django Sites domain configuration for allauth.
 
 ### Stripe
 

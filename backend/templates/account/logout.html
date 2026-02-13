@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex min-h-[calc(100vh-64px)] items-center justify-center">
+  <div class="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-lg text-center">
+
+    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+      <svg class="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+      </svg>
+    </div>
+
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">Sign out</h1>
+      <p class="mt-2 text-sm text-slate-500">Are you sure you want to sign out of your account?</p>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit"
+              class="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2">
+        Yes, sign out
+      </button>
+    </form>
+
+    <a href="/"
+       class="block text-sm font-medium text-blue-600 hover:text-blue-500">
+      &larr; Back to dashboard
+    </a>
+
+  </div>
+</div>
+{% endblock %}

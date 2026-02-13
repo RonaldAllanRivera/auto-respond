@@ -164,6 +164,8 @@ Use Django Admin as the primary CMS:
 - Subscriber profile + settings (grade level, max sentences)
 - Basic dashboard pages (templates)
 
+Status: Tested and verified (see `TEST.md`).
+
 ### Phase 2 — Stripe subscriptions (monthly)
 - Stripe Checkout Session creation
 - Stripe webhook handler + subscription sync
