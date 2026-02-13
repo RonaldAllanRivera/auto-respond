@@ -13,6 +13,7 @@
         <div class="flex items-center gap-3 text-sm">
           <a href="/" class="text-slate-700 hover:text-slate-900">Lessons</a>
       {% if user.is_authenticated %}
+            <a href="/devices/" class="text-slate-700 hover:text-slate-900">Devices</a>
             <a href="/settings/" class="text-slate-700 hover:text-slate-900">Settings</a>
             <form method="post" action="/accounts/logout/" class="inline">
               {% csrf_token %}

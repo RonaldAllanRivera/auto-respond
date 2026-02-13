@@ -5,7 +5,7 @@ A **Django + Chrome Extension** app that listens to **Google Meet live captions*
 This repository is organized as a **single monorepo**:
 
 - `backend/`: Django (accounts/billing/devices/lessons), Postgres integration, admin CMS models
-- `extension/`: Chrome Extension (MV3) scaffold with pairing-code configuration (device pairing planned)
+- `extension/`: Chrome Extension (MV3) starter scaffold
 
 ## Product overview
 
@@ -31,16 +31,20 @@ See `PLAN.md` for the full phased roadmap.
 
 ## Current implementation status
 
-Phase 1 (Multi-tenant accounts + dashboard shell) — Completed and verified.
+| Phase | Status |
+|---|---|
+| 0 — Repo hygiene & foundations | Completed |
+| 1 — Multi-tenant accounts + dashboard shell | Completed & verified |
+| 2 — Extension pairing + device security | Completed (backend + extension scaffold) |
+| 3 — Meet captions ingestion + question detection | Backend completed; extension items pending |
+| 4 — AI answering (streaming) | `POST /api/questions/` done; SSE + OpenAI next |
 
-The codebase currently contains a **fresh SaaS-first scaffold** for:
+The codebase currently contains:
 
-- Django backend with multi-tenant-ready data model (`accounts`, `billing`, `devices`, `lessons`)
-- Django Admin registrations for core CMS models (pricing plan, coupons, devices, lessons)
-- Chrome extension skeleton with an options page to store a pairing code
-- Docker Compose local development stack (Django + Postgres)
+- **Backend**: Django with Google OAuth, device pairing API, caption ingestion API (`POST /api/captions/`, `POST /api/questions/`), server-side dedupe, auto-create lessons per meeting, admin CMS, Docker Compose stack
+- **Extension**: Starter scaffold with options page (pairing flow) and background service worker (authenticated API helper)
 
-Google OAuth is implemented. Next up: extension pairing, caption ingestion + question detection, and AI answering (streaming). Stripe billing and coupons come after the core Q&A flow works end-to-end (see `PLAN.md`).
+Next up: AI answering with OpenAI streaming + SSE endpoint (Phase 4 backend). See `PLAN.md` for the full roadmap with **(backend)** / **(extension)** tags.
 
 ## Local development (Ubuntu + Docker Desktop)
 

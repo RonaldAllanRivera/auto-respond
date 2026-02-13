@@ -32,15 +32,21 @@ Target deployment:
 - Billing: Stripe Checkout + Webhooks.
 - Dashboard: lessons, transcripts, Q&A, settings, billing status.
 - Admin CMS: Django Admin with curated models.
-- API used by extension:
-  - Pairing endpoints
-  - Captions ingest endpoint
+- **API endpoints** consumed by the extension:
+  - `POST /api/devices/pair/` — exchange pairing code for device token
+  - `POST /api/captions/` — ingest raw caption events
+  - `POST /api/questions/` — submit detected question + context
+  - `GET /api/questions/<id>/stream/` — SSE stream of AI answer tokens
 
 ### 3.2 Chrome extension (MV3)
+
+The `extension/` folder lives in this monorepo and contains a starter scaffold. The backend provides the API contract above.
+
+Extension responsibilities:
 - Content script reads captions from the Meet DOM.
 - **Question detection**: accumulates captions in a sliding buffer; detects questions via interrogative keywords (`what`, `when`, `where`, `who`, `why`, `how`, `is`, `are`, `do`, `does`, `did`, `can`, `could`, `will`, `would`, `should`) and/or trailing `?`. This is necessary because Google Meet captions often omit punctuation.
-- Background service worker posts detected questions (with context) to Django.
-- Background service worker posts raw caption events to Django for transcript storage.
+- Background service worker posts detected questions (with context) to the backend API.
+- Background service worker posts raw caption events to the backend API for transcript storage.
 - **Popup**: displays the latest AI answer for the active meeting (quick-glance).
 - One-time pairing flow (subscriber copies a pairing code from the web dashboard).
 
@@ -181,27 +187,32 @@ Use Django Admin as the primary CMS:
 
 Status: Tested and verified (see `TEST.md`).
 
-### Phase 2 — Extension pairing + device security
-- Pairing code generation in dashboard
-- Pairing endpoint for extension
-- Device tokens, revoke devices
+### Phase 2 — Extension pairing + device security (Completed)
+- **(backend)** Pairing code generation in dashboard
+- **(backend)** `POST /api/devices/pair/` endpoint
+- **(backend)** Device token issue, verify, revoke
+- **(backend)** Dashboard UI: devices list + revoke
+- **(extension)** Options page: enter pairing code, call API, store token (scaffold provided)
 
-### Phase 3 — Meet captions ingestion + question detection
-- Caption reader hardening (selectors + fallback scanning)
-- Dedupe + cooldown client-side and server-side
-- Auto-create lesson per meeting title + date
-- Manual lesson selection support
-- **Question detection** in extension (sliding buffer + interrogative keyword matching + `?` fallback)
-- `POST /api/questions/` endpoint (receives question + context + lesson ID)
+### Phase 3 — Meet captions ingestion + question detection (Backend completed)
+- **(backend)** `POST /api/captions/` endpoint — receive + store caption events ✓
+- **(backend)** Server-side dedupe + cooldown ✓
+- **(backend)** Auto-create lesson per meeting title + date ✓
+- **(backend)** Manual lesson selection support ✓
+- **(extension)** Caption reader hardening (selectors + fallback scanning)
+- **(extension)** Client-side dedupe + cooldown
+- **(extension)** **Question detection** (sliding buffer + interrogative keyword matching + `?` fallback)
+- **(extension)** Post captions and detected questions to backend API
 
 ### Phase 4 — AI answering (streaming)
-- Retrieve transcript chunks for the lesson as context
-- Build prompt: question + transcript context + grade-level setting
-- Call OpenAI API in **streaming mode**
-- **SSE endpoint** (`GET /api/questions/<id>/stream/`) streams tokens to dashboard and extension
-- Persist full `QuestionAnswer` record after stream completes
-- Dashboard: `EventSource` JS renders tokens live
-- Extension popup: background worker forwards stream to popup UI
+- **(backend)** `POST /api/questions/` endpoint (receives question + context + lesson ID) ✔
+- **(backend)** Retrieve transcript chunks for the lesson as context
+- **(backend)** Build prompt: question + transcript context + grade-level setting
+- **(backend)** Call OpenAI API in **streaming mode**
+- **(backend)** **SSE endpoint** (`GET /api/questions/<id>/stream/`) streams answer tokens
+- **(backend)** Persist full `QuestionAnswer` record after stream completes
+- **(backend)** Dashboard: `EventSource` JS renders tokens live
+- **(extension)** Popup: consume SSE stream and display latest Q&A
 
 ### Phase 5 — Lessons upload + OCR (optional)
 - Upload screenshots

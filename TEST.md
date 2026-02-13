@@ -1,12 +1,20 @@
-# Testing Guide (Phase 1)
+# Testing Guide (Phase 1, 2 & 3)
 
-Status: Phase 1 verified — 2026-02-13
+Status:
+- Phase 1 verified — 2026-02-13
+- Phase 2 backend verified — 2026-02-13 (pairing code generation tested; extension pairing pending extension install)
+- Phase 3 backend verified — 2026-02-13 (caption + question APIs tested via curl/Python)
 
 Summary of what was validated:
 - Google OAuth login via django-allauth (Google button renders and redirects)
 - Subscriber settings form (save + reload)
 - Authenticated dashboard shell
 - Static assets served via WhiteNoise; Tailwind styling present on public pages
+- Device pairing code generation + countdown timer on `/devices/`
+- `POST /api/devices/pair/` — exchange code for device token
+- `POST /api/captions/` — caption ingestion with server-side dedupe + auto-create lesson
+- `POST /api/questions/` — question submission with context storage
+- Device token auth (`X-Device-Token` header) — 401 on missing/invalid tokens
 
 This guide describes how to verify Phase 1 features:
 - Google OAuth login (django-allauth)
@@ -111,9 +119,101 @@ If broken:
   docker compose logs -f web
   ```
 
-## What’s next (Phase 2 preview)
+## 7) Test caption ingestion API (Phase 3)
 
-- Add Stripe monthly subscription flow:
-  - Checkout Session endpoint (uses Billing Plan’s Stripe Price ID from Admin)
-  - Webhook handler to sync subscription status
-  - Entitlement checks for caption ingest and Q&A
+These endpoints require a device token. To get one for testing, either:
+- Pair via the extension, or
+- Use curl to pair manually (see step 7a).
+
+### 7a) Get a device token for testing
+
+1. Generate a pairing code on `/devices/`
+2. Exchange it:
+   ```bash
+   curl -X POST http://localhost:8000/api/devices/pair/ \
+     -H "Content-Type: application/json" \
+     -d '{"code": "YOUR_CODE", "label": "curl test"}'
+   ```
+3. Save the `token` from the response.
+
+### 7b) POST /api/captions/
+
+```bash
+curl -X POST http://localhost:8000/api/captions/ \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Token: YOUR_TOKEN" \
+  -d '{
+    "meeting_id": "abc-defg-hij",
+    "meeting_title": "Math Class",
+    "speaker": "Teacher",
+    "text": "What is 2 plus 2?"
+  }'
+```
+
+Expected:
+- Response: `{"lesson_id": 1, "chunk_id": 1, "created": true}`
+- A new Lesson appears in Admin (title: "Math Class", meeting_id: "abc-defg-hij")
+- A TranscriptChunk is created under that lesson
+- Sending the same caption again returns `"created": false` (dedupe)
+
+### 7c) Auto-create lesson per meeting
+
+Send captions with different `meeting_id` values:
+- Same `meeting_id` + same date → same lesson
+- Different `meeting_id` → new lesson
+- No `meeting_id` → always creates a new lesson
+
+### 7d) Manual lesson selection
+
+```bash
+curl -X POST http://localhost:8000/api/captions/ \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Token: YOUR_TOKEN" \
+  -d '{"lesson_id": 1, "speaker": "Student", "text": "Is it 4?"}'
+```
+
+Expected: caption stored under lesson ID 1 (no auto-create).
+
+### 7e) POST /api/questions/
+
+```bash
+curl -X POST http://localhost:8000/api/questions/ \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Token: YOUR_TOKEN" \
+  -d '{
+    "question": "What is photosynthesis?",
+    "context": "The teacher was explaining how plants make food using sunlight.",
+    "meeting_id": "abc-defg-hij",
+    "meeting_title": "Biology Class"
+  }'
+```
+
+Expected:
+- Response: `{"question_id": 1, "lesson_id": 2}`
+- A QuestionAnswer record in Admin with empty answer (Phase 4 will fill it)
+- Context stored as a TranscriptChunk
+
+### 7f) Auth failure tests
+
+```bash
+# No token
+curl -X POST http://localhost:8000/api/captions/ \
+  -H "Content-Type: application/json" \
+  -d '{"text": "test"}'
+# Expected: 401 "Missing X-Device-Token header"
+
+# Bad token
+curl -X POST http://localhost:8000/api/captions/ \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Token: fake-token" \
+  -d '{"text": "test"}'
+# Expected: 401 "Invalid or revoked device token"
+```
+
+## What's next (Phase 4 preview)
+
+- AI answering (streaming):
+  - OpenAI API integration with streaming mode
+  - SSE endpoint for live answer tokens
+  - Dashboard EventSource JS for live rendering
+  - QuestionAnswer record persisted after stream completes

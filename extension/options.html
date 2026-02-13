@@ -4,31 +4,67 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Meet Lessons — Options</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #0f172a; padding: 24px; min-width: 400px; }
+      h1 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+      .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.1); margin-bottom: 16px; }
+      .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+      .card p { font-size: 13px; color: #64748b; margin-bottom: 12px; }
+      label { display: block; font-size: 13px; font-weight: 500; color: #334155; margin-bottom: 4px; }
+      input[type="url"], input[type="text"] { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none; }
+      input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
+      button { padding: 8px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s; }
+      .btn-primary { background: #0f172a; color: #fff; }
+      .btn-primary:hover { background: #1e293b; }
+      .btn-danger { background: #fff; color: #dc2626; border: 1px solid #fca5a5; }
+      .btn-danger:hover { background: #fef2f2; }
+      .status { font-size: 13px; margin-top: 8px; padding: 8px 12px; border-radius: 8px; }
+      .status-success { background: #f0fdf4; color: #166534; }
+      .status-error { background: #fef2f2; color: #991b1b; }
+      .status-info { background: #eff6ff; color: #1e40af; }
+      .paired-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+      .paired-badge.active { background: #f0fdf4; color: #166534; }
+      .paired-badge.inactive { background: #fef2f2; color: #991b1b; }
+      .field { margin-bottom: 12px; }
+      .actions { display: flex; gap: 8px; align-items: center; }
+      .hidden { display: none; }
+    </style>
   </head>
   <body>
-    <h1>Meet Lessons — Options</h1>
+    <h1>Meet Lessons</h1>
 
-    <form id="form">
-      <p>
-        <label>
-          Backend base URL
-          <input id="backendBaseUrl" type="url" placeholder="http://localhost:8000" required />
-        </label>
-      </p>
+    <!-- Backend URL -->
+    <div class="card">
+      <h2>Backend URL</h2>
+      <p>The URL of your Meet Lessons server.</p>
+      <div class="field">
+        <input id="backendBaseUrl" type="url" placeholder="http://localhost:8000" />
+      </div>
+      <button id="saveUrl" class="btn-primary">Save URL</button>
+      <div id="urlStatus"></div>
+    </div>
 
-      <p>
-        <label>
-          Pairing code
-          <input id="pairingCode" type="text" placeholder="" />
-        </label>
-      </p>
-
-      <p>
-        <button type="submit">Save</button>
-      </p>
-
-      <p id="status"></p>
-    </form>
+    <!-- Pairing -->
+    <div class="card">
+      <h2>Device Pairing</h2>
+      <div id="pairedInfo" class="hidden">
+        <p>This extension is paired to your account.</p>
+        <span class="paired-badge active">Paired</span>
+        <div style="margin-top: 12px;">
+          <button id="unpairBtn" class="btn-danger">Unpair device</button>
+        </div>
+      </div>
+      <div id="pairForm">
+        <p>Enter the pairing code from your dashboard (<strong>Devices</strong> page).</p>
+        <div class="field">
+          <label for="pairingCode">Pairing code</label>
+          <input id="pairingCode" type="text" placeholder="e.g. AB12CD34" maxlength="16" style="text-transform: uppercase; letter-spacing: 2px; font-family: monospace;" />
+        </div>
+        <button id="pairBtn" class="btn-primary">Pair device</button>
+      </div>
+      <div id="pairStatus"></div>
+    </div>
 
     <script src="options.js"></script>
   </body>
