@@ -6,9 +6,11 @@ Build a **single-repo SaaS** that:
 - Lets subscribers sign in with **Google**.
 - Captures **Google Meet live captions** using a **Chrome Extension (MV3)**.
 - Automatically stores captions as **Lessons** (auto-create per meeting title + date) or to a manually selected lesson.
-- Provides a subscriber **dashboard** (settings, lessons, transcripts, Q&A).
+- **Detects questions** in the caption stream (extension-side) and sends them to the backend for AI answering.
+- Backend passes detected questions + lesson transcript context to the **OpenAI API** and **streams the answer** via SSE.
+- Answers are visible in real time on the **subscriber dashboard** (streaming tokens) and in the **extension popup** (quick-glance view).
+- Provides a subscriber **dashboard** (settings, lessons, transcripts, Q&A history).
 - Provides an owner **admin CMS** (you) to manage users, subscriptions, devices, coupons, and content.
-- Answers questions **at once** (fast) using the selected lesson transcript, with a fallback “grade-level answer” setting.
 
 Target deployment:
 
@@ -36,8 +38,21 @@ Target deployment:
 
 ### 3.2 Chrome extension (MV3)
 - Content script reads captions from the Meet DOM.
-- Background service worker posts caption events to Django.
+- **Question detection**: accumulates captions in a sliding buffer; detects questions via interrogative keywords (`what`, `when`, `where`, `who`, `why`, `how`, `is`, `are`, `do`, `does`, `did`, `can`, `could`, `will`, `would`, `should`) and/or trailing `?`. This is necessary because Google Meet captions often omit punctuation.
+- Background service worker posts detected questions (with context) to Django.
+- Background service worker posts raw caption events to Django for transcript storage.
+- **Popup**: displays the latest AI answer for the active meeting (quick-glance).
 - One-time pairing flow (subscriber copies a pairing code from the web dashboard).
+
+### 3.3 Real-time Q&A flow
+1. Extension content script accumulates captions in a sliding buffer.
+2. Extension detects questions via interrogative keyword matching and/or trailing `?`.
+3. Extension sends `POST /api/questions/` with: question text, recent caption context, lesson ID.
+4. Backend retrieves transcript chunks for the lesson as additional context.
+5. Backend calls OpenAI API (streaming mode) with: question + transcript + grade-level prompt.
+6. Backend streams answer tokens via **SSE** (`GET /api/questions/<id>/stream/`).
+7. Dashboard renders tokens live; extension popup shows latest Q&A.
+8. After stream completes, backend persists the full `QuestionAnswer` record.
 
 ## 4) Authentication model
 
@@ -166,36 +181,42 @@ Use Django Admin as the primary CMS:
 
 Status: Tested and verified (see `TEST.md`).
 
-### Phase 2 — Stripe subscriptions (monthly)
-- Stripe Checkout Session creation
-- Stripe webhook handler + subscription sync
-- Entitlement checks on caption ingest and answering
-
-### Phase 3 — Coupons (admin CMS)
-- `Coupon` model + Django Admin
-- Apply coupon code in checkout flow
-- Validation rules (active, expiry, redemption limits)
-
-### Phase 4 — Extension pairing + device security
+### Phase 2 — Extension pairing + device security
 - Pairing code generation in dashboard
 - Pairing endpoint for extension
 - Device tokens, revoke devices
 
-### Phase 5 — Meet captions ingestion
+### Phase 3 — Meet captions ingestion + question detection
 - Caption reader hardening (selectors + fallback scanning)
 - Dedupe + cooldown client-side and server-side
 - Auto-create lesson per meeting title + date
 - Manual lesson selection support
+- **Question detection** in extension (sliding buffer + interrogative keyword matching + `?` fallback)
+- `POST /api/questions/` endpoint (receives question + context + lesson ID)
 
-### Phase 6 — Lessons upload + OCR (optional)
+### Phase 4 — AI answering (streaming)
+- Retrieve transcript chunks for the lesson as context
+- Build prompt: question + transcript context + grade-level setting
+- Call OpenAI API in **streaming mode**
+- **SSE endpoint** (`GET /api/questions/<id>/stream/`) streams tokens to dashboard and extension
+- Persist full `QuestionAnswer` record after stream completes
+- Dashboard: `EventSource` JS renders tokens live
+- Extension popup: background worker forwards stream to popup UI
+
+### Phase 5 — Lessons upload + OCR (optional)
 - Upload screenshots
 - OCR pipeline
 - Store OCR transcript chunks in lessons
 
-### Phase 7 — AI answering (fast, answer-at-once)
-- Retrieve latest/top chunks for a lesson
-- Prompt for grade-level concise answers
-- Persist Q&A history
+### Phase 6 — Stripe subscriptions (monthly)
+- Stripe Checkout Session creation
+- Stripe webhook handler + subscription sync
+- Entitlement checks on caption ingest and answering
+
+### Phase 7 — Coupons (admin CMS)
+- `Coupon` model + Django Admin
+- Apply coupon code in checkout flow
+- Validation rules (active, expiry, redemption limits)
 
 ### Phase 8 — Render production hardening
 - Proper `ALLOWED_HOSTS`, HTTPS settings
@@ -205,6 +226,7 @@ Status: Tested and verified (see `TEST.md`).
 
 ## 11) Non-goals (for MVP)
 
-- Streaming answers (SSE/WebSockets)
 - Audio capture
-- Full extension overlay UI (dashboard is enough)
+- Full extension overlay UI (popup for latest Q&A is enough; no floating overlay)
+- Multi-language caption support
+- Offline/local AI models

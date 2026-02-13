@@ -1,6 +1,6 @@
-# Meet Lessons — SaaS (Django + Google Meet Captions → Lessons → AI Q&A)
+# Meet Lessons — AI-Powered Q&A from Google Meet Captions
 
-A production-minded **Django SaaS** that turns **Google Meet live captions** into structured **Lessons** stored in Postgres, then answers questions using those lessons via the **OpenAI API**.
+A **Django + Chrome Extension** app that listens to **Google Meet live captions**, detects questions in real time, and answers them using the **OpenAI API** — tailored to the student's grade level. Answers stream live to the web dashboard and the extension popup.
 
 This repository is organized as a **single monorepo**:
 
@@ -10,8 +10,10 @@ This repository is organized as a **single monorepo**:
 ## Product overview
 
 - **Subscribers** sign in with **Google**, manage settings (grade level / answer length), and view lessons, transcripts, and Q&A.
-- The **Chrome extension** reads Meet captions and sends them to the backend.
+- The **Chrome extension** reads Meet captions, **detects questions** (via interrogative keywords like *what*, *when*, *how*, etc., since Meet captions often omit `?`), and sends them to the backend.
 - The backend creates a lesson per meeting (title + date) by default, or routes captions to a user-selected lesson.
+- Detected questions are answered by the **OpenAI API** using lesson transcript context.
+- **Answers stream in real time** on the subscriber dashboard and in the extension popup.
 - The AI answers are optimized for speed and clarity (default: short grade-appropriate responses).
 
 ## SaaS features (planned)
@@ -38,7 +40,7 @@ The codebase currently contains a **fresh SaaS-first scaffold** for:
 - Chrome extension skeleton with an options page to store a pairing code
 - Docker Compose local development stack (Django + Postgres)
 
-Google OAuth is implemented. Stripe checkout/webhooks, device pairing endpoints, and caption ingestion are planned next (see `PLAN.md`).
+Google OAuth is implemented. Next up: extension pairing, caption ingestion + question detection, and AI answering (streaming). Stripe billing and coupons come after the core Q&A flow works end-to-end (see `PLAN.md`).
 
 ## Local development (Ubuntu + Docker Desktop)
 
