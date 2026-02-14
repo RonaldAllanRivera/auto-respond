@@ -96,7 +96,7 @@ def api_pair_device(request: HttpRequest) -> JsonResponse:
     # Create device and issue token
     device = Device.objects.create(
         user=pairing_code.user,
-        label=label or "Chrome Extension",
+        label=label or "Desktop App",
     )
     raw_token = issue_token(device)
 

@@ -12,15 +12,16 @@
         {{ lesson.created_at|date:"M d, Y · H:i" }}
       </p>
     </div>
+    <button onclick="location.reload()" class="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-3 py-1.5">Refresh</button>
   </div>
 
   <!-- Questions & Answers -->
-  <div>
+  <div id="qa-section">
     <h2 class="text-lg font-semibold text-slate-900 mb-3">Questions &amp; Answers</h2>
     {% if qas %}
-      <div class="space-y-3">
+      <div class="space-y-3" id="qa-list">
         {% for qa in qas %}
-          <div class="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
+          <div class="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm" id="qa-{{ qa.id }}">
             <div class="flex items-start gap-3">
               <span class="mt-0.5 flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">Q</span>
               <div class="flex-1">
@@ -30,7 +31,11 @@
                     <p class="pl-3 text-slate-700 text-sm leading-relaxed">{{ qa.answer }}</p>
                   </div>
                 {% else %}
-                  <p class="mt-2 text-sm text-slate-400 italic">AI answer pending (Phase 4)</p>
+                  <div class="mt-2 pl-0 border-l-2 border-blue-300">
+                    <p class="pl-3 text-slate-700 text-sm leading-relaxed" id="qa-answer-{{ qa.id }}">
+                      <span class="text-slate-400 italic">Generating answer...</span>
+                    </p>
+                  </div>
                 {% endif %}
                 <p class="mt-2 text-xs text-slate-400">{{ qa.created_at|date:"H:i:s" }}{% if qa.model %} &middot; {{ qa.model }}{% endif %}{% if qa.latency_ms %} &middot; {{ qa.latency_ms }}ms{% endif %}</p>
               </div>
@@ -39,8 +44,8 @@
         {% endfor %}
       </div>
     {% else %}
-      <div class="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center">
-        <p class="text-sm text-slate-500">No questions detected yet for this lesson.</p>
+      <div class="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center" id="qa-empty">
+        <p class="text-sm text-slate-500">No questions detected yet. Capture a screenshot with questions using the desktop app.</p>
       </div>
     {% endif %}
   </div>
@@ -69,4 +74,41 @@
     {% endif %}
   </div>
 </div>
+
+<script>
+// SSE streaming for unanswered questions
+document.addEventListener('DOMContentLoaded', function() {
+  {% for qa in qas %}
+    {% if not qa.answer %}
+    (function() {
+      var el = document.getElementById('qa-answer-{{ qa.id }}');
+      if (!el) return;
+      var source = new EventSource('/api/questions/{{ qa.id }}/stream/');
+      var tokens = [];
+      source.onmessage = function(event) {
+        var data = JSON.parse(event.data);
+        if (data.done) {
+          source.close();
+          if (tokens.length === 0 && data.token) {
+            el.textContent = data.token;
+          }
+          return;
+        }
+        tokens.push(data.token);
+        el.textContent = tokens.join('');
+      };
+      source.onerror = function() {
+        source.close();
+        if (tokens.length === 0) {
+          el.innerHTML = '<span class="text-red-400 italic">Failed to load answer</span>';
+        }
+      };
+    })();
+    {% endif %}
+  {% endfor %}
+
+  // Auto-refresh page every 10s to pick up new Q&A from desktop app
+  setTimeout(function() { location.reload(); }, 10000);
+});
+</script>
 {% endblock %}

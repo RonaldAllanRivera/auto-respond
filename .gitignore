@@ -13,6 +13,7 @@ dist/
 build/
 .venv/
 venv/
+desktop/.venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -24,7 +25,10 @@ htmlcov/
 staticfiles/
 media/
 
-# Node / extensions
+# Desktop app local config
+.meet_lessons/
+
+# Node
 node_modules/
 *.log
 

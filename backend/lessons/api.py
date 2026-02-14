@@ -2,21 +2,26 @@
 API views for caption ingestion and question submission.
 
 All endpoints require device token authentication via X-Device-Token header.
+Used by the desktop app (screenshot OCR capture tool).
 """
 
 import hashlib
 import json
+import time
 from datetime import date
 
+from django.conf import settings
 from django.db import IntegrityError
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from accounts.models import SubscriberProfile
 from devices.auth import require_device_token
 
+from .ai import answer_question, answer_question_streaming
 from .models import Lesson, QuestionAnswer, TranscriptChunk
 
 
@@ -147,6 +152,8 @@ def api_questions(request: HttpRequest) -> JsonResponse:
     """
     Submit a detected question for AI answering.
 
+    Called by the desktop app after OCR + question detection.
+
     Request body (JSON):
         {
             "question": "What is photosynthesis?",
@@ -157,10 +164,7 @@ def api_questions(request: HttpRequest) -> JsonResponse:
         }
 
     Response:
-        {"question_id": 789, "lesson_id": 123}
-
-    The answer will be generated asynchronously in Phase 4 (AI answering).
-    For now, this endpoint stores the question and returns its ID.
+        {"question_id": 789, "lesson_id": 123, "answer": "...", "latency_ms": 1234}
     """
     try:
         body = json.loads(request.body)
@@ -185,17 +189,9 @@ def api_questions(request: HttpRequest) -> JsonResponse:
     elif meeting_id:
         lesson = _get_or_create_lesson(request.user, meeting_id, meeting_title)
     else:
-        lesson = None
+        lesson = _get_or_create_lesson(request.user, "", meeting_title)
 
-    # Store the question (answer will be filled by Phase 4 AI answering)
-    qa = QuestionAnswer.objects.create(
-        user=request.user,
-        lesson=lesson,
-        question=question_text,
-        answer="",  # placeholder until AI answering is implemented
-    )
-
-    # Also store the context as a transcript chunk if provided
+    # Store the context as a transcript chunk if provided
     if context and lesson:
         content_hash = _hash_caption("", context)
         try:
@@ -208,7 +204,104 @@ def api_questions(request: HttpRequest) -> JsonResponse:
         except IntegrityError:
             pass  # already stored
 
+    # Get user preferences for AI prompt
+    profile = SubscriberProfile.get_for_user(request.user)
+
+    # Gather recent transcript context from the lesson
+    full_context = context
+    if lesson:
+        recent_chunks = lesson.transcript_chunks.order_by("-created_at")[:10]
+        chunk_texts = [c.text for c in reversed(recent_chunks)]
+        full_context = "\n".join(chunk_texts)
+
+    # Call OpenAI synchronously
+    ai_result = answer_question(
+        question=question_text,
+        context=full_context,
+        grade_level=profile.grade_level,
+        max_sentences=profile.max_sentences,
+    )
+
+    # Store the question + answer
+    qa = QuestionAnswer.objects.create(
+        user=request.user,
+        lesson=lesson,
+        question=question_text,
+        answer=ai_result["answer"],
+        model=ai_result["model"],
+        latency_ms=ai_result["latency_ms"],
+    )
+
     return JsonResponse({
         "question_id": qa.id,
         "lesson_id": lesson.id if lesson else None,
+        "answer": ai_result["answer"],
+        "latency_ms": ai_result["latency_ms"],
     })
+
+
+# ---------------------------------------------------------------------------
+# GET /api/questions/<id>/stream/ — SSE streaming for dashboard
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+def api_question_stream(request: HttpRequest, question_id: int) -> StreamingHttpResponse:
+    """
+    SSE endpoint that streams the AI answer for a question.
+
+    Used by the Django dashboard to display live-streaming answers.
+    Requires the user to be logged in (session auth).
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required"}, status=401)
+
+    try:
+        qa = QuestionAnswer.objects.get(id=question_id, user=request.user)
+    except QuestionAnswer.DoesNotExist:
+        return JsonResponse({"error": "Question not found"}, status=404)
+
+    # If already answered, return the stored answer as a single SSE event
+    if qa.answer:
+        def already_answered():
+            yield f"data: {json.dumps({'token': qa.answer, 'done': True})}\n\n"
+        return StreamingHttpResponse(
+            already_answered(),
+            content_type="text/event-stream",
+        )
+
+    # Stream from OpenAI
+    profile = SubscriberProfile.get_for_user(request.user)
+
+    full_context = ""
+    if qa.lesson:
+        recent_chunks = qa.lesson.transcript_chunks.order_by("-created_at")[:10]
+        chunk_texts = [c.text for c in reversed(recent_chunks)]
+        full_context = "\n".join(chunk_texts)
+
+    def stream_tokens():
+        full_answer = []
+        start = time.time()
+        for token in answer_question_streaming(
+            question=qa.question,
+            context=full_context,
+            grade_level=profile.grade_level,
+            max_sentences=profile.max_sentences,
+        ):
+            full_answer.append(token)
+            yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
+
+        # Persist the complete answer
+        answer_text = "".join(full_answer)
+        latency_ms = int((time.time() - start) * 1000)
+        qa.answer = answer_text
+        qa.model = settings.OPENAI_MODEL
+        qa.latency_ms = latency_ms
+        qa.save(update_fields=["answer", "model", "latency_ms"])
+
+        yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+
+    response = StreamingHttpResponse(stream_tokens(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response

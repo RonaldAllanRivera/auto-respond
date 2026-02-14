@@ -6,6 +6,11 @@ This document defines the environment variable contract for local development an
 
 Copy `.env.example` to `.env` and set values.
 
+Scope note:
+
+- `/.env` (repo root) is for **backend + Docker Compose** variables.
+- `/desktop/.env` is for **desktop app** variables.
+
 Required for running the backend locally:
 
 - `DJANGO_SECRET_KEY`
@@ -71,8 +76,21 @@ Pricing notes:
 - This project will support a **Monthly subscription** in Stripe.
 - The Stripe **Price ID** for that plan is configured via the Django Admin Billing Plan CMS (stored in the database), not via environment variables.
 
-## Current scaffold security variables
+## Device pairing
 
-The scaffold uses **device pairing + server-issued device tokens** for extension-to-backend requests.
+The desktop app uses **device pairing + server-issued device tokens** for desktop-app-to-backend requests.
 
 - `DEVICE_TOKEN_SECRET`
+
+## Desktop app environment (`desktop/.env`)
+
+Copy `desktop/.env.example` to `desktop/.env` and set:
+
+- `MEET_LESSONS_URL`
+  - Local dev: `http://localhost:8000`
+  - Production desktop build: your Render URL (e.g. `https://<service>.onrender.com`)
+
+Notes:
+
+- The desktop app no longer exposes a Backend URL input field in the UI.
+- The desktop app reads `MEET_LESSONS_URL` from `desktop/.env`.
