@@ -3,8 +3,8 @@
 Status:
 - Phase 1 verified — 2026-02-14 (Google login, user dashboard, admin login/pages)
 - Phase 2 verified — 2026-02-14 (device pairing UI + API)
-- Phase 3 verified — 2026-02-14 (desktop capture pipeline + backend APIs)
-- Phase 4 verified — 2026-02-14 (AI answering + SSE streaming)
+- Phase 3 verified — 2026-02-14 (desktop capture pipeline + backend APIs, including Linux clipboard watcher fallback)
+- Phase 4 verified — 2026-02-14 (AI answering + SSE streaming; answers visible on dashboard and in Django Admin records)
 
 Summary of what was validated:
 - Google OAuth login via django-allauth
@@ -138,7 +138,7 @@ python main.py
 
 1. Ensure `desktop/.env` contains `MEET_LESSONS_URL=http://localhost:8000`
 2. Enter pairing code from dashboard → click "Pair Device" → should show "✓ Paired"
-3. Open Google Meet with CC enabled
+3. Open Google Meet with CC enabled (or any app/page with readable text)
 4. Press Print Screen → activity log should show:
    - "Screenshot captured — running OCR..."
    - "OCR done (XXms): ..."
@@ -153,9 +153,9 @@ python main.py
 ## 10) Test desktop app question detection
 
 The detector finds questions via:
-- Sentences ending with `?`
-- Sentences starting with interrogative words (what, when, where, who, why, how, etc.)
-- Math expressions (e.g. "5 + 3")
+- WH-start questions (`what`, `when`, `where`, `who`, `why`, `how`, `which`, etc.), with or without `?`
+- Math expressions, including fractions (e.g. `5 + 3`, `1/4 x 1/5`)
+- URL/UI OCR noise is ignored (e.g. `docs.google.com/.../edit?`)
 
 To test without a screenshot, use the API directly (step 7 above).
 

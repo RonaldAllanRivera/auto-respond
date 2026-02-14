@@ -9,14 +9,16 @@ Usage:
     python main.py
 """
 
+import hashlib
 import sys
 import threading
 import time
 import tkinter as tk
+from collections import deque
 from datetime import datetime
 from tkinter import messagebox, ttk
 
-from PIL import ImageGrab
+from PIL import Image, ImageGrab
 from pynput import keyboard
 
 import api_client
@@ -28,6 +30,10 @@ import ocr
 class MeetLessonsApp:
     """Main tkinter application."""
 
+    _CLIPBOARD_POLL_MS_MIN = 900
+    _CLIPBOARD_POLL_MS_MAX = 4000
+    _CLIPBOARD_POLL_BACKOFF_MULT = 1.35
+
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Meet Lessons")
@@ -37,10 +43,17 @@ class MeetLessonsApp:
 
         self._hotkey_listener = None
         self._processing = False
+        self._clipboard_job = None
+        self._clipboard_last_sig = None
+        self._clipboard_seen = deque(maxlen=200)
+        self._pending_clipboard_image = None
+        self._pending_clipboard_sig = None
+        self._clipboard_poll_ms = self._CLIPBOARD_POLL_MS_MIN
 
         self._build_ui()
         self._refresh_pairing_status()
         self._start_hotkey_listener()
+        self._start_clipboard_watcher()
 
     # ------------------------------------------------------------------ UI
     # ------------------------------------------------------------------ UI
@@ -169,7 +182,10 @@ class MeetLessonsApp:
             if key == keyboard.Key.print_screen:
                 # Run capture in a thread to avoid blocking the listener
                 if not self._processing:
-                    threading.Thread(target=self._capture_screenshot, daemon=True).start()
+                    threading.Thread(
+                        target=lambda: self._capture_screenshot(wait_for_clipboard=True),
+                        daemon=True,
+                    ).start()
 
         self._hotkey_listener = keyboard.Listener(on_press=on_press)
         self._hotkey_listener.daemon = True
@@ -179,41 +195,125 @@ class MeetLessonsApp:
     def _manual_capture(self):
         """Manual capture button — grabs current clipboard or takes screenshot."""
         if not self._processing:
-            threading.Thread(target=self._capture_screenshot, daemon=True).start()
+            threading.Thread(
+                target=lambda: self._capture_screenshot(wait_for_clipboard=False),
+                daemon=True,
+            ).start()
 
     # ------------------------------------------------------------------ Capture
 
-    def _capture_screenshot(self):
-        """Grab screenshot from clipboard, OCR it, detect questions, send to backend."""
+    def _grab_image_from_clipboard(
+        self,
+        *,
+        silent: bool = False,
+        convert_rgb: bool = True,
+    ) -> Image.Image | None:
+        try:
+            data = ImageGrab.grabclipboard()
+        except Exception as exc:
+            if not silent:
+                self.root.after(0, lambda: self._log(f"Could not read image from clipboard: {exc}"))
+            return None
+
+        if data is None:
+            return None
+
+        if isinstance(data, Image.Image):
+            return data.convert("RGB") if convert_rgb else data
+
+        if isinstance(data, list) and data:
+            try:
+                image = Image.open(data[0])
+                return image.convert("RGB") if convert_rgb else image
+            except Exception as exc:
+                if not silent:
+                    self.root.after(0, lambda: self._log(f"Could not open clipboard image file: {exc}"))
+                return None
+
+        return None
+
+    def _image_signature(self, image: Image.Image) -> str:
+        thumb = image.convert("L").resize((32, 32), Image.BILINEAR)
+        payload = thumb.tobytes()
+        return hashlib.blake2b(payload, digest_size=16).hexdigest()
+
+    def _start_clipboard_watcher(self):
+        if self._clipboard_job is not None:
+            return
+        self._clipboard_last_sig = None
+        self._clipboard_poll_ms = self._CLIPBOARD_POLL_MS_MIN
+        self._poll_clipboard()
+
+    def _stop_clipboard_watcher(self):
+        job = self._clipboard_job
+        self._clipboard_job = None
+        if job is None:
+            return
+        try:
+            self.root.after_cancel(job)
+        except Exception:
+            pass
+
+    def _poll_clipboard(self):
+        changed = False
+        try:
+            if config.is_paired():
+                image = self._grab_image_from_clipboard(silent=True, convert_rgb=False)
+                if image is not None:
+                    sig = self._image_signature(image)
+                    if sig != self._clipboard_last_sig and sig not in self._clipboard_seen:
+                        self._clipboard_last_sig = sig
+                        self._clipboard_seen.append(sig)
+                        changed = True
+
+                        if self._processing:
+                            if self._pending_clipboard_sig != sig:
+                                self._pending_clipboard_image = image
+                                self._pending_clipboard_sig = sig
+                                self.root.after(0, lambda: self._log(
+                                    "Queued screenshot from clipboard; will process after current OCR completes."
+                                ))
+                        else:
+                            threading.Thread(
+                                target=lambda img=image.convert("RGB"): self._process_image(img),
+                                daemon=True,
+                            ).start()
+        finally:
+            if changed:
+                self._clipboard_poll_ms = self._CLIPBOARD_POLL_MS_MIN
+            else:
+                if not config.is_paired():
+                    self._clipboard_poll_ms = self._CLIPBOARD_POLL_MS_MAX
+                else:
+                    self._clipboard_poll_ms = min(
+                        self._CLIPBOARD_POLL_MS_MAX,
+                        int(self._clipboard_poll_ms * self._CLIPBOARD_POLL_BACKOFF_MULT) + 25,
+                    )
+
+            self._clipboard_job = self.root.after(self._clipboard_poll_ms, self._poll_clipboard)
+
+    def _wait_for_clipboard_image(self, timeout_s: float = 8.0, poll_s: float = 0.2):
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            image = self._grab_image_from_clipboard(silent=True)
+            if image is not None:
+                return image
+            time.sleep(poll_s)
+        return None
+
+    def _process_image(self, image: Image.Image):
         if self._processing:
             return
 
-        # Block capture entirely when not paired (paywall enforcement)
         if not config.is_paired():
             self.root.after(0, lambda: self._log("Not paired — pair your device first to enable capture"))
             return
 
         self._processing = True
-
         try:
             self.root.after(0, lambda: self.capture_status_var.set("Capturing..."))
             self.root.after(0, lambda: self._log("Screenshot captured — running OCR..."))
 
-            # Small delay to let Print Screen populate the clipboard
-            time.sleep(0.3)
-
-            # Grab image from clipboard
-            image = ImageGrab.grabclipboard()
-            if image is None:
-                # Fallback: grab entire screen
-                self.root.after(0, lambda: self._log("No image in clipboard — capturing screen"))
-                image = ImageGrab.grab()
-
-            if image is None:
-                self.root.after(0, lambda: self._log("ERROR: Could not capture screenshot"))
-                return
-
-            # OCR
             start = time.time()
             text = ocr.extract_text(image)
             ocr_ms = int((time.time() - start) * 1000)
@@ -222,12 +322,22 @@ class MeetLessonsApp:
                 self.root.after(0, lambda: self._log(f"OCR returned no text ({ocr_ms}ms)"))
                 return
 
-            preview = text[:100].replace("\n", " ")
+            cleaned_text = detector.clean_transcript_text(text)
+            if not cleaned_text or len(cleaned_text) < 3:
+                if detector.looks_like_noise(text):
+                    self.root.after(0, lambda: self._log(
+                        "Capture looks like a URL / browser UI. Skipping send. Try capturing only the caption area."
+                    ))
+                    return
+                payload_text = text
+            else:
+                payload_text = cleaned_text
+
+            preview = payload_text[:100].replace("\n", " ")
             self.root.after(0, lambda: self._log(f"OCR done ({ocr_ms}ms): {preview}..."))
 
-            # Send full text as caption
             try:
-                result = api_client.send_caption(text=text, speaker="", meeting_title="Screen Capture")
+                result = api_client.send_caption(text=payload_text, speaker="", meeting_title="Screen Capture")
                 self.root.after(0, lambda: self._log(
                     f"Caption sent → lesson {result.get('lesson_id')}, "
                     f"chunk {result.get('chunk_id')}, new={result.get('created')}"
@@ -235,8 +345,7 @@ class MeetLessonsApp:
             except Exception as e:
                 self.root.after(0, lambda: self._log(f"Caption send error: {e}"))
 
-            # Detect questions
-            questions = detector.detect_questions(text)
+            questions = detector.detect_questions(payload_text)
             if questions:
                 self.root.after(0, lambda: self._log(
                     f"Found {len(questions)} question(s): {questions[0][:80]}..."
@@ -244,7 +353,7 @@ class MeetLessonsApp:
                 for q in questions:
                     try:
                         result = api_client.send_question(
-                            question=q, context=text, meeting_title="Screen Capture"
+                            question=q, context=payload_text, meeting_title="Screen Capture"
                         )
                         self.root.after(0, lambda q=q, r=result: self._log(
                             f"Question sent → ID {r.get('question_id')}: {q[:60]}"
@@ -254,12 +363,56 @@ class MeetLessonsApp:
             else:
                 self.root.after(0, lambda: self._log("No questions detected in this capture"))
 
-            self.root.after(0, lambda: self.capture_status_var.set("Press Print Screen to capture"))
-
         except Exception as e:
             self.root.after(0, lambda: self._log(f"Capture error: {e}"))
         finally:
             self._processing = False
+            self.root.after(0, lambda: self.capture_status_var.set("Press Print Screen to capture"))
+
+            if self._pending_clipboard_image is not None and self._pending_clipboard_sig is not None:
+                pending = self._pending_clipboard_image
+                self._pending_clipboard_image = None
+                self._pending_clipboard_sig = None
+                threading.Thread(
+                    target=lambda img=pending: self._process_image(img),
+                    daemon=True,
+                ).start()
+
+    def _capture_screenshot(self, *, wait_for_clipboard: bool):
+        """Grab screenshot from clipboard, OCR it, detect questions, send to backend."""
+        if self._processing:
+            return
+
+        # Block capture entirely when not paired (paywall enforcement)
+        if not config.is_paired():
+            self.root.after(0, lambda: self._log("Not paired — pair your device first to enable capture"))
+            return
+
+        try:
+            if wait_for_clipboard:
+                self.root.after(0, lambda: self._log(
+                    "Waiting for clipboard image — select region then press Ctrl+C"
+                ))
+                image = self._wait_for_clipboard_image()
+                if image is None:
+                    self.root.after(0, lambda: self._log(
+                        "No clipboard image detected. Try: Print Screen → select region → Ctrl+C, then try again."
+                    ))
+                    return
+            else:
+                time.sleep(0.3)
+                image = self._grab_image_from_clipboard(silent=True)
+                if image is None:
+                    self.root.after(0, lambda: self._log("No image in clipboard — capturing screen"))
+                    image = ImageGrab.grab()
+
+            if image is None:
+                self.root.after(0, lambda: self._log("ERROR: Could not capture screenshot"))
+                return
+
+            self._process_image(image)
+        finally:
+            pass
 
     # ------------------------------------------------------------------ Misc
 
@@ -271,6 +424,7 @@ class MeetLessonsApp:
     def _on_close(self):
         if self._hotkey_listener:
             self._hotkey_listener.stop()
+        self._stop_clipboard_watcher()
         self.root.destroy()
 
     def run(self):

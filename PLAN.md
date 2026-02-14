@@ -48,7 +48,7 @@ Desktop app responsibilities:
 - Listen for **Print Screen** hotkey (global keyboard listener via `pynput`).
 - Grab screenshot from clipboard (`Pillow.ImageGrab`).
 - Run **local OCR** via Tesseract (`pytesseract`) — no API cost, ~200ms per image.
-- **Question detection**: scan OCR text for interrogative keywords (`what`, `when`, `where`, `who`, `why`, `how`, `is`, `are`, `do`, `does`, `did`, `can`, `could`, `will`, `would`, `should`), trailing `?`, and math expressions.
+- **Question detection**: scan OCR text for WH-start questions (`what`, `when`, `where`, `who`, `why`, `how`, `which`, etc.; with or without `?`) and math expressions (including fractions like `1/4 x 1/5`), while filtering URL/UI OCR noise.
 - Send full OCR text to `POST /api/captions/` for transcript storage.
 - Send detected questions to `POST /api/questions/` for AI answering.
 - Show **pairing status** and **activity log** only (no AI answers — those are on the dashboard).
@@ -58,7 +58,7 @@ Desktop app responsibilities:
 1. Student opens Google Meet with CC/subtitles enabled.
 2. Student presses **Print Screen** → desktop app grabs the screenshot.
 3. Desktop app runs local OCR (Tesseract, ~200ms).
-4. Desktop app detects questions via interrogative keywords, `?`, and math patterns.
+4. Desktop app detects questions via WH-start patterns and math expressions (including fractions), and filters URL/UI OCR noise.
 5. Desktop app sends OCR text to `POST /api/captions/` (transcript storage).
 6. Desktop app sends detected questions to `POST /api/questions/` (AI answering).
 7. Backend retrieves transcript context for the lesson.
@@ -198,25 +198,25 @@ Use Django Admin as the primary CMS:
 - **(backend)** Dashboard UI: devices list + revoke ✓
 - **(desktop)** Pairing UI in tkinter app ✓
 
-### Phase 3 — Screenshot capture + OCR + question detection
-- **(backend)** `POST /api/captions/` endpoint — receive + store OCR text
-- **(backend)** Server-side dedupe via content_hash
-- **(backend)** Auto-create lesson per meeting title + date
-- **(desktop)** Print Screen hotkey listener (pynput)
-- **(desktop)** Clipboard screenshot capture (Pillow ImageGrab)
-- **(desktop)** Local OCR via Tesseract (pytesseract)
-- **(desktop)** Question detection (interrogative keywords + `?` + math patterns)
-- **(desktop)** Send captions and questions to backend API
-- **(desktop)** Activity log in tkinter UI
+### Phase 3 — Screenshot capture + OCR + question detection (Completed)
+- **(backend)** `POST /api/captions/` endpoint — receive + store OCR text ✓
+- **(backend)** Server-side dedupe via content_hash ✓
+- **(backend)** Auto-create lesson per meeting title + date ✓
+- **(desktop)** Print Screen hotkey listener (pynput) ✓
+- **(desktop)** Clipboard screenshot capture (Pillow ImageGrab) ✓
+- **(desktop)** Local OCR via Tesseract (pytesseract) ✓
+- **(desktop)** Question detection (WH-start + optional `?` + math/fractions + URL/UI filtering) ✓
+- **(desktop)** Send captions and questions to backend API ✓
+- **(desktop)** Activity log in tkinter UI ✓
 
-### Phase 4 — AI answering
-- **(backend)** `POST /api/questions/` calls OpenAI API synchronously
-- **(backend)** Retrieves transcript chunks for the lesson as context
-- **(backend)** Builds prompt with question + transcript + grade-level setting
-- **(backend)** Persists `QuestionAnswer` record with answer, model, latency
-- **(backend)** `GET /api/questions/<id>/stream/` SSE endpoint for dashboard
-- **(backend)** Dashboard lesson detail page with SSE streaming Q&A display
-- **(backend)** `EventSource` JS renders answer tokens live
+### Phase 4 — AI answering (Completed)
+- **(backend)** `POST /api/questions/` calls OpenAI API synchronously ✓
+- **(backend)** Retrieves transcript chunks for the lesson as context ✓
+- **(backend)** Builds prompt with question + transcript + grade-level setting ✓
+- **(backend)** Persists `QuestionAnswer` record with answer, model, latency ✓
+- **(backend)** `GET /api/questions/<id>/stream/` SSE endpoint for dashboard ✓
+- **(backend)** Dashboard lesson detail page with SSE streaming Q&A display ✓
+- **(backend)** `EventSource` JS renders answer tokens live ✓
 
 ### Phase 5 — Stripe subscriptions (monthly)
 - Stripe Checkout Session creation
@@ -371,13 +371,15 @@ Question sent → ID 1: [question text]
 
 **Test: Question detection**
 
-The detector recognizes three types of questions:
+The detector recognizes two categories of questions:
 
 | Input text | Detected as |
 |---|---|
-| `What is photosynthesis?` | Question mark sentence |
-| `How do plants make food` | Interrogative keyword (adds `?`) |
+| `What is photosynthesis?` | WH-start question |
+| `How do plants make food` | WH-start question (adds `?`) |
+| `1/4 x 1/5` | Fraction math expression → `What is 1/4 x 1/5?` |
 | `5 + 3` | Math expression → `What is 5 + 3?` |
+| `docs.google.com/.../edit?` | Ignored (URL noise) |
 | `The sky is blue.` | Not detected (no question) |
 
 To test without screenshots, use curl directly:

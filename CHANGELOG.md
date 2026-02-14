@@ -61,6 +61,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Device pairing working.
   - User dashboard working.
   - Admin login and admin pages working.
+  - Desktop capture flow working with Linux clipboard watcher fallback.
+  - AI answers verified from desktop-submitted questions in dashboard and Django Admin records.
+
+- Desktop capture reliability + detector hardening:
+  - Added clipboard watcher fallback for Linux/DE environments where `Print Screen` is intercepted.
+  - Added adaptive clipboard polling backoff to reduce idle UI wakeups/CPU activity.
+  - Updated detector to ignore URL/browser UI OCR noise (e.g. `docs.google.com/.../edit?`).
+  - Question detection now prefers WH-start questions (with optional `?`) and math expressions.
+  - Added fraction math detection support (e.g. `1/4 x 1/5`).
+  - Improved sentence parsing by treating OCR line breaks as spaces to avoid truncated questions.
 
 ### Removed
 - Chrome Extension (`extension/` folder) — replaced by Python desktop app.

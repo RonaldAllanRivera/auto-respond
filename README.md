@@ -1,20 +1,69 @@
-# Meet Lessons — AI-Powered Q&A from Google Meet Screenshots
+# Meet Lessons
 
-A **Django + Python Desktop App** that captures **Google Meet captions via screenshots**, runs **local OCR**, detects questions, and answers them using the **OpenAI API** — tailored to the student's grade level. AI answers stream live on the web dashboard (the paywall).
+**AI-assisted Q&A from screenshots using Django + Python desktop OCR.**
 
-This repository is organized as a **single monorepo**:
+Meet Lessons is a full-stack SaaS-style project where a Python desktop client captures screenshots, extracts text locally with Tesseract, detects likely questions, and sends them to a Django backend for AI answering. Answers stream live in the web dashboard via SSE.
 
-- `backend/`: Django (accounts/billing/devices/lessons/AI), Postgres, admin CMS
-- `desktop/`: Python desktop app (screenshot capture, OCR, question detection, device pairing)
+---
 
-## Product overview
+## Table of contents
 
-- **Subscribers** sign in with **Google**, manage settings (grade level / answer length), and view lessons, transcripts, and Q&A on the **web dashboard**.
-- The **desktop app** captures screenshots (Print Screen hotkey), runs **local OCR** (Tesseract), and **detects questions** (interrogative keywords, `?`, math expressions).
-- OCR text is sent to the backend as transcript chunks; detected questions are sent for AI answering.
-- The backend calls **OpenAI** with the question + lesson transcript context + grade-level prompt.
-- **AI answers stream live** on the subscriber dashboard via SSE — this is the **paywall**.
-- The desktop app is a **free capture tool** — it shows pairing status and activity log only, never AI answers.
+- [Project highlights](#project-highlights)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [Core capabilities](#core-capabilities)
+- [Current implementation status](#current-implementation-status)
+- [Tech stack](#tech-stack)
+- [API contract (desktop ↔ backend)](#api-contract-desktop--backend)
+- [Quickstart (local)](#quickstart-local)
+- [Validation summary (verified)](#validation-summary-verified)
+- [Troubleshooting](#troubleshooting)
+- [What’s next](#whats-next)
+
+---
+
+## Project highlights
+
+- **End-to-end product thinking**: desktop client + backend APIs + dashboard UX + admin workflows.
+- **Security-conscious architecture**: no shared client secrets; device pairing with server-issued tokens.
+- **Cost-aware ML integration**: local OCR (Tesseract) + targeted OpenAI calls only for detected questions.
+- **Production-minded reliability**: dedupe, paywall enforcement, SSE streaming, Linux capture fallbacks.
+- **Multi-tenant SaaS patterns**: per-user data isolation across lessons, transcripts, devices, and Q&A.
+
+---
+
+## Architecture at a glance
+
+### Monorepo layout
+
+- `backend/` — Django app (accounts, devices, lessons, billing, OpenAI integration)
+- `desktop/` — Python tkinter app (capture, OCR, question detection, pairing)
+
+### Data flow
+
+1. User captures text via desktop app (`Print Screen` or clipboard watcher fallback).
+2. Desktop app runs local OCR (Tesseract).
+3. Desktop app filters OCR noise (URLs/UI junk), detects questions, and submits:
+   - `POST /api/captions/`
+   - `POST /api/questions/`
+4. Backend stores transcript, builds prompt with user settings, calls OpenAI.
+5. Dashboard streams answer tokens via `GET /api/questions/<id>/stream/`.
+
+---
+
+## Core capabilities
+
+- Google OAuth login (django-allauth)
+- Subscriber settings (grade level, max sentences)
+- Device pairing (`POST /api/devices/pair/`) with revocation
+- Screenshot OCR ingestion + server-side dedupe
+- Question detection:
+  - WH-start questions (`what`, `where`, `when`, `how`, etc.)
+  - math expressions (including fractions like `1/4 x 1/5`)
+  - URL/UI noise filtering (e.g., `docs.google.com/.../edit?` is ignored)
+- AI answers stored and streamed in dashboard (SSE)
+- Desktop paywall behavior: capture blocked while unpaired
+
+---
 
 ## Current implementation status
 
@@ -29,15 +78,47 @@ This repository is organized as a **single monorepo**:
 | 6 — Coupons (admin CMS) | Planned |
 | 7 — Render production hardening | Planned |
 
-See `PLAN.md` for the full phased roadmap.
+See `PLAN.md` for detailed phased deliverables.
 
-## Local development (Ubuntu + Docker Desktop)
+---
+
+## Tech stack
+
+### Backend
+- Django
+- PostgreSQL
+- django-allauth (Google OAuth)
+- WhiteNoise (static files)
+- OpenAI API
+
+### Desktop
+- Python + tkinter
+- Pillow (`ImageGrab`)
+- pytesseract + Tesseract OCR
+- pynput (global hotkey)
+
+### Infra / DevEx
+- Docker Compose
+- Render (target deployment)
+
+---
+
+## API contract (desktop ↔ backend)
+
+- `POST /api/devices/pair/` — exchange pairing code for device token
+- `POST /api/captions/` — ingest OCR transcript chunks
+- `POST /api/questions/` — submit detected question + context, return AI answer
+- `GET /api/questions/<id>/stream/` — stream answer tokens via SSE (dashboard)
+
+---
+
+## Quickstart (local)
 
 ### 1) Prerequisites
 
-- **Docker** and **Docker Compose**
-- **Python 3.10+** (for the desktop app)
-- **Tesseract OCR** installed on the system:
+- Docker + Docker Compose
+- Python 3.10+
+- Tesseract OCR
 
 ```bash
 # Ubuntu/Debian
@@ -49,46 +130,29 @@ brew install tesseract
 
 ### 2) Configure environment
 
-Create a `.env` in the repo root (copy from `.env.example`) and set at minimum:
+Copy `.env.example` → `.env` and set:
 
-- `DJANGO_SECRET_KEY` — generate with: `python3 -c "import secrets; print(secrets.token_urlsafe(64))"`
-- `DEVICE_TOKEN_SECRET` — generate with: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
-- `OPENAI_API_KEY` — required for AI answering
+- `DJANGO_SECRET_KEY`
+- `DEVICE_TOKEN_SECRET`
+- `OPENAI_API_KEY`
 
-Create `desktop/.env` (copy from `desktop/.env.example`):
+Copy `desktop/.env.example` → `desktop/.env`:
 
-- `MEET_LESSONS_URL=http://localhost:8000` (local backend URL for desktop app)
+- `MEET_LESSONS_URL=http://localhost:8000`
 
-### 3) Google OAuth setup (optional for local dev)
-
-This project uses **django-allauth**. Google OAuth is optional for local development (you can use `createsuperuser`), but required for the SaaS login flow.
-
-1. Go to Google Cloud Console → **APIs & Services** → **Credentials** → **Create OAuth client ID** (Web application)
-2. Set authorized redirect URI: `http://localhost:8000/accounts/google/login/callback/`
-3. Copy Client ID and Secret into `.env`:
-   - `GOOGLE_CLIENT_ID=...`
-   - `GOOGLE_CLIENT_SECRET=...`
-
-### 4) Start the backend
+### 3) Start backend
 
 ```bash
 docker compose up --build
-```
-
-The container automatically runs `migrate`, `collectstatic`, and `seed_site` on startup.
-
-Create an admin user:
-
-```bash
 docker compose run --rm web python manage.py createsuperuser
 ```
 
 Open:
 
-- **Dashboard**: `http://localhost:8000/`
-- **Admin**: `http://localhost:8000/admin/`
+- Dashboard: `http://localhost:8000/`
+- Admin: `http://localhost:8000/admin/`
 
-### 5) Set up the desktop app
+### 4) Start desktop app
 
 ```bash
 cd desktop
@@ -97,74 +161,49 @@ python -m venv .venv
 .venv/bin/python main.py
 ```
 
-The desktop app window opens with:
-- **Device Pairing** section
-- **Screenshot Capture** section with activity log
-- Capture controls disabled until paired (paywall enforcement)
+### 5) Pair device and capture
 
-### 6) Pair the desktop app
+1. Generate pairing code in dashboard (`/devices/`)
+2. Pair in desktop app
+3. Capture text from Google Meet or any readable screen
+4. Open lesson detail in dashboard and confirm streamed answers
 
-**Step 1 — Generate a pairing code on the dashboard:**
+---
 
-1. Log in at `http://localhost:8000/` (Google OAuth or superuser)
-2. Click **Devices** in the navbar (or go to `http://localhost:8000/devices/`)
-3. Click **Generate pairing code**
-4. An 8-character code appears (e.g. `5074D63A`) — you have **10 minutes** to use it
+## Validation summary (verified)
 
-**Step 2 — Enter the code in the desktop app:**
+- Desktop capture pipeline is working end-to-end
+- AI answers are visible in dashboard and persisted in Django Admin
+- Device pairing, dashboard, admin pages, and auth flows are working
 
-1. Enter the pairing code in the **Pairing code** field
-2. Click **Pair Device**
-3. You should see: **"✓ Paired (device ...)"**
+Detailed test checklist: `TEST.md`
 
-**Step 3 — Verify on the dashboard:**
+---
 
-1. Go to `http://localhost:8000/devices/`
-2. Your device should appear in the list (label: "Desktop App")
-
-### 7) Capture screenshots
-
-1. Open **Google Meet** and enable **CC/subtitles**
-2. Press **Print Screen** (or click "Capture Now" in the desktop app)
-3. The app will:
-   - Grab the screenshot from clipboard
-   - Run OCR (~200ms)
-   - Detect questions
-   - Send text + questions to the backend
-4. View AI answers on the **dashboard** → click the lesson → see Q&A with streaming answers
-
-### 8) Troubleshooting
+## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| "Network error" when pairing | Ensure Docker is running and `MEET_LESSONS_URL` in `desktop/.env` is correct |
-| OCR returns no text | Ensure Tesseract is installed: `tesseract --version` |
-| No image in clipboard | Press Print Screen first, or use "Capture Now" button |
-| "Pairing code expired" | Generate a new code on `/devices/` |
-| CORS error | Set `DJANGO_DEBUG=1` in `.env` and restart Docker |
+| Pairing network errors | Confirm backend is running and `MEET_LESSONS_URL` is correct in `desktop/.env` |
+| OCR returns empty text | Confirm `tesseract --version` and capture readable text |
+| Print Screen not detected on Linux | Use clipboard watcher flow (`Print Screen` → select → `Ctrl+C`) |
+| No AI answer | Confirm `OPENAI_API_KEY` in `.env`, then restart backend |
 
-### 9) Revoking / unpairing
+### Linux dock/icons keep moving (CPU wakeups)
 
-- **From the dashboard:** Go to `/devices/`, click **Revoke** on any device.
-- **From the desktop app:** Click **Unpair** to clear the stored token locally.
+The clipboard watcher polls to support reliable capture on Linux desktops where hotkeys are intercepted. If UI wakeups still feel high, tune:
 
-## Django Admin setup
+- `MeetLessonsApp._CLIPBOARD_POLL_MS_MIN`
+- `MeetLessonsApp._CLIPBOARD_POLL_MS_MAX`
 
-```bash
-docker compose run --rm web python manage.py createsuperuser
-```
+File: `desktop/main.py`
 
-- Visit `http://localhost:8000/admin/`
-- Sites framework is auto-configured by `seed_site` on startup
-- Manage pricing: `Billing → Billing plans`
-- Manage coupons: `Billing → Coupon codes`
+---
 
-## Engineering highlights (portfolio)
+## What’s next
 
-- **Desktop + Web SaaS architecture**: free capture tool + paid dashboard with AI answers
-- **Local OCR** (Tesseract): no per-user API cost, fast (~200ms), works offline
-- **OpenAI streaming**: SSE endpoint streams answer tokens live to the dashboard
-- **Device pairing**: secure token-based auth without shipping secrets in the client
-- **Multi-tenant isolation**: all data scoped to authenticated user
-- **Server-side dedupe**: SHA-256 content hashing prevents duplicate transcript chunks
-- Clear roadmap and deliverables (see `PLAN.md`)
+- Stripe subscriptions (Checkout + webhook sync + entitlement checks)
+- Coupon management in Admin
+- Render production hardening
+
+See `PLAN.md` and `CHANGELOG.md` for ongoing milestones.

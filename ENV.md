@@ -94,3 +94,6 @@ Notes:
 
 - The desktop app no longer exposes a Backend URL input field in the UI.
 - The desktop app reads `MEET_LESSONS_URL` from `desktop/.env`.
+- No additional desktop environment variables are required for screenshot watcher/detection tuning; current tuning is code-level in `desktop/main.py`.
+- On Linux, the desktop app includes a clipboard watcher fallback so capture still works when `Print Screen` is intercepted by the desktop environment.
+- Question detection is intentionally strict: WH-start questions + math expressions (including fractions), with URL/UI OCR noise filtered out.
