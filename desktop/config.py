@@ -16,11 +16,21 @@ from dotenv import load_dotenv
 _env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(_env_path)
 
-# Backend URL priority:
-#   1. MEET_LESSONS_URL env var (set in .env for local dev)
-#   2. Hardcoded production URL (used by the packaged .exe)
-PRODUCTION_URL = "https://meetlessons.onrender.com"
-BACKEND_URL = os.environ.get("MEET_LESSONS_URL", PRODUCTION_URL)
+# Backend URL priority (all env-driven):
+#   1. MEET_LESSONS_URL (active target URL)
+#   2. MEET_LESSONS_PRODUCTION_URL (fallback if MEET_LESSONS_URL is empty)
+#   3. MEET_LESSONS_LOCAL_URL (fallback for local development)
+BACKEND_URL = (
+    os.environ.get("MEET_LESSONS_URL", "").strip()
+    or os.environ.get("MEET_LESSONS_PRODUCTION_URL", "").strip()
+    or os.environ.get("MEET_LESSONS_LOCAL_URL", "").strip()
+)
+
+if not BACKEND_URL:
+    raise RuntimeError(
+        "Backend URL is not configured. Set MEET_LESSONS_URL (or MEET_LESSONS_PRODUCTION_URL / "
+        "MEET_LESSONS_LOCAL_URL) in desktop/.env.",
+    )
 
 CONFIG_DIR = Path.home() / ".meet_lessons"
 CONFIG_FILE = CONFIG_DIR / "config.json"
