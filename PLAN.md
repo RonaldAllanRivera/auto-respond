@@ -234,6 +234,17 @@ Use Django Admin as the primary CMS:
 - DB migrations on deploy
 - Admin hardening and logging
 
+### Phase 8 — Dashboard realtime UX (Django templates, pre-Next.js)
+- Add "Latest Q&A" panel on `/` (dashboard home) so students can see newest Q&A immediately.
+- Add lightweight API endpoint (session-auth) for latest Q&A feed per user.
+- Add JavaScript polling/SSE on dashboard home to update latest Q&A without manual refresh.
+- Ensure first detected question/answer appears at once on the page.
+
+### Phase 9 — Frontend migration to Next.js (post-core completion)
+- Migrate user-facing pages to Next.js after core backend/deployment phases are stable.
+- Keep Django as API/admin service while Next.js handles subscriber UI.
+- Preserve current API contract and parity for lessons, transcripts, Q&A streaming, settings, devices, and billing views.
+
 ## 11) Testing the desktop app (Phase 2–4)
 
 ### 11.1 Prerequisites

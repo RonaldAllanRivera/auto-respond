@@ -19,9 +19,9 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U meet_lessons" \
-          --health-interval=10s \
-          --health-timeout=5s \
+          --health-cmd="pg_isready -U meet_lessons"
+          --health-interval=10s
+          --health-timeout=5s
           --health-retries=5
 
     steps:
@@ -50,6 +50,24 @@ jobs:
           DEVICE_TOKEN_SECRET: ci-token-secret
           OPENAI_API_KEY: ''
         run: |
+          python - <<'PY'
+          import socket
+          import time
+
+          host = "127.0.0.1"
+          port = 5432
+          deadline = time.time() + 60
+
+          while time.time() < deadline:
+            try:
+              with socket.create_connection((host, port), timeout=2):
+                print("Postgres is reachable")
+                break
+            except OSError:
+              time.sleep(1)
+          else:
+            raise SystemExit("Postgres did not become reachable in time")
+          PY
           python -m compileall backend
           python backend/manage.py check
           python backend/manage.py migrate --noinput
