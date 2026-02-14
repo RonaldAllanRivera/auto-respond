@@ -194,12 +194,59 @@ If you are NOT setting `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env`, you 
 - Billing Plan: `Billing → Billing plans` (store Stripe Monthly Price ID and discount)
 - Coupons: `Billing → Coupon codes`
 
-## Chrome Extension (Ubuntu + Windows 11)
+## Chrome Extension setup + device pairing
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select the `extension/` folder
+### 3) Install the extension
+
+1. Open **Google Chrome** (or any Chromium-based browser like Edge, Brave)
+2. Navigate to `chrome://extensions`
+3. Toggle **Developer mode** ON (top-right switch)
+4. Click **Load unpacked**
+5. Browse to the `extension/` folder inside this repo and select it
+6. The extension should appear in the list as **Meet Lessons**
+
+> **Tip:** Pin the extension to your toolbar — click the puzzle icon in Chrome's toolbar, then click the pin icon next to "Meet Lessons".
+
+### 4) Pair the extension with your account
+
+The extension needs a one-time pairing code to connect to your backend. No passwords or secrets are stored in the extension — only a server-issued device token.
+
+**Step 1 — Generate a pairing code on the dashboard:**
+
+1. Make sure the backend is running (`docker compose up --build`)
+2. Log in at `http://localhost:8000/` (Google OAuth or superuser)
+3. Click **Devices** in the navbar (or go to `http://localhost:8000/devices/`)
+4. Click **Generate pairing code**
+5. An 8-character code appears (e.g. `5074D63A`) with a live countdown — you have **10 minutes** to use it
+
+**Step 2 — Enter the code in the extension:**
+
+1. Right-click the Meet Lessons extension icon → **Options** (or click the extension → gear icon)
+2. Confirm the **Backend URL** is `http://localhost:8000` and click **Save URL**
+3. Enter the pairing code from step 1 into the **Pairing code** field
+4. Click **Pair device**
+5. You should see: ✅ **"Device paired successfully!"** and the UI switches to a "Paired" state
+
+**Step 3 — Verify on the dashboard:**
+
+1. Go back to `http://localhost:8000/devices/`
+2. Your device should appear in the list (label: "Chrome Extension")
+3. The pairing code is now used and no longer shown
+
+### 5) Troubleshooting extension pairing
+
+| Problem | Fix |
+|---|---|
+| "Network error" when pairing | Ensure Docker is running and backend URL is correct (`http://localhost:8000`) |
+| CORS error in console | Set `DJANGO_DEBUG=1` in `.env` (enables `CORS_ALLOW_ALL_ORIGINS`) and restart |
+| "Invalid pairing code" | Code is case-insensitive but must match exactly; check it hasn't expired (10 min) |
+| "Pairing code expired or already used" | Generate a new code on `/devices/` |
+| Extension not visible in Chrome | Ensure Developer mode is ON; check for errors on `chrome://extensions` |
+
+### 6) Revoking / unpairing
+
+- **From the dashboard:** Go to `/devices/`, click **Revoke** on any device. The extension will no longer be able to make API calls with that token.
+- **From the extension:** Open extension options, click **Unpair device**. This clears the stored token locally. You'll need a new pairing code to reconnect.
 
 ## How to set up admin
 

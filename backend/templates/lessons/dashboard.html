@@ -9,12 +9,21 @@
   {% if lessons %}
     <div class="space-y-3">
       {% for l in lessons %}
-        <div class="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:shadow">
+        <a href="{% url 'lesson_detail' l.id %}" class="block rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:shadow hover:border-blue-300 no-underline">
           <div class="flex items-center justify-between">
-            <h2 class="font-medium text-slate-900">{{ l.title }}</h2>
-            <span class="text-xs text-slate-400">{{ l.created_at|date:"M d, Y · H:i" }}</span>
+            <div>
+              <h2 class="font-medium text-slate-900">{{ l.title }}</h2>
+              {% if l.meeting_id %}
+                <span class="text-xs text-slate-400">{{ l.meeting_id }}</span>
+              {% endif %}
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-slate-500">{{ l.transcript_chunks.count }} chunks</span>
+              <span class="text-xs text-slate-500">{{ l.qas.count }} Q&amp;A</span>
+              <span class="text-xs text-slate-400">{{ l.created_at|date:"M d, Y · H:i" }}</span>
+            </div>
           </div>
-        </div>
+        </a>
       {% endfor %}
     </div>
   {% else %}

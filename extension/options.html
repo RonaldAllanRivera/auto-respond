@@ -29,6 +29,23 @@
       .field { margin-bottom: 12px; }
       .actions { display: flex; gap: 8px; align-items: center; }
       .hidden { display: none; }
+      .empty-state { color: #94a3b8; font-size: 13px; font-style: italic; }
+      .log-entry { padding: 3px 0; border-bottom: 1px solid #e2e8f0; line-height: 1.5; }
+      .log-entry:last-child { border-bottom: none; }
+      .log-time { color: #94a3b8; }
+      .log-status { color: #3b82f6; }
+      .log-caption { color: #059669; }
+      .log-question { color: #d97706; font-weight: 600; }
+      .log-error { color: #dc2626; }
+      .log-speaker { color: #6366f1; font-weight: 500; }
+      .qa-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+      .qa-item:last-child { margin-bottom: 0; }
+      .qa-question { font-weight: 600; color: #0f172a; margin-bottom: 6px; font-size: 13px; }
+      .qa-question::before { content: 'Q: '; color: #d97706; }
+      .qa-answer { color: #334155; font-size: 13px; line-height: 1.5; }
+      .qa-answer::before { content: 'A: '; color: #059669; font-weight: 600; }
+      .qa-answer.pending { color: #94a3b8; font-style: italic; }
+      .qa-meta { font-size: 11px; color: #94a3b8; margin-top: 4px; }
     </style>
   </head>
   <body>
@@ -64,6 +81,27 @@
         <button id="pairBtn" class="btn-primary">Pair device</button>
       </div>
       <div id="pairStatus"></div>
+    </div>
+
+    <!-- Questions & Answers -->
+    <div class="card" id="qaCard">
+      <h2>Questions &amp; Answers</h2>
+      <p>Detected questions and AI answers from your current meeting.</p>
+      <div id="qaList" style="margin-top: 12px;">
+        <div class="empty-state">No questions detected yet. Join a Google Meet call with captions enabled.</div>
+      </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+        <h2>Activity Log</h2>
+        <button id="clearLogBtn" class="btn-danger" style="padding: 4px 10px; font-size: 11px;">Clear</button>
+      </div>
+      <p>Live feed of caption capture events from Google Meet.</p>
+      <div id="activityLog" style="margin-top: 12px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #f1f5f9; border-radius: 8px; padding: 12px;">
+        <div class="empty-state">No activity yet. Join a Google Meet call with captions enabled.</div>
+      </div>
     </div>
 
     <script src="options.js"></script>

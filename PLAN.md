@@ -188,21 +188,25 @@ Use Django Admin as the primary CMS:
 Status: Tested and verified (see `TEST.md`).
 
 ### Phase 2 — Extension pairing + device security (Completed)
-- **(backend)** Pairing code generation in dashboard
-- **(backend)** `POST /api/devices/pair/` endpoint
-- **(backend)** Device token issue, verify, revoke
-- **(backend)** Dashboard UI: devices list + revoke
-- **(extension)** Options page: enter pairing code, call API, store token (scaffold provided)
+- **(backend)** Pairing code generation in dashboard ✓
+- **(backend)** `POST /api/devices/pair/` endpoint ✓
+- **(backend)** Device token issue, verify, revoke ✓
+- **(backend)** Dashboard UI: devices list + revoke ✓
+- **(extension)** Options page: enter pairing code, call API, store token ✓
 
-### Phase 3 — Meet captions ingestion + question detection (Backend completed)
+Status: Fully tested and verified — dashboard pairing + extension pairing confirmed working (see `TEST.md`).
+
+### Phase 3 — Meet captions ingestion + question detection (Completed)
 - **(backend)** `POST /api/captions/` endpoint — receive + store caption events ✓
 - **(backend)** Server-side dedupe + cooldown ✓
 - **(backend)** Auto-create lesson per meeting title + date ✓
 - **(backend)** Manual lesson selection support ✓
-- **(extension)** Caption reader hardening (selectors + fallback scanning)
-- **(extension)** Client-side dedupe + cooldown
-- **(extension)** **Question detection** (sliding buffer + interrogative keyword matching + `?` fallback)
-- **(extension)** Post captions and detected questions to backend API
+- **(extension)** Caption reader hardening (selectors + fallback scanning) ✓
+- **(extension)** Client-side dedupe + cooldown ✓
+- **(extension)** **Question detection** (sliding buffer + interrogative keyword matching + `?` fallback) ✓
+- **(extension)** Post captions and detected questions to backend API ✓
+
+Status: Backend verified via curl/Python tests. Extension content.js v2 rewritten with correct Google Meet DOM selectors (`TEjq6e`, `.iTTPOb`, `.zs7s8d.jxFHg`), wait-for-call flow, caption settle timer, and CC toggle detection. Options page now shows live activity log and Q&A section. Dashboard lesson list is clickable with chunk/Q&A counts; lesson detail page shows transcript + Q&A. Requires live Google Meet session to fully test caption capture.
 
 ### Phase 4 — AI answering (streaming)
 - **(backend)** `POST /api/questions/` endpoint (receives question + context + lesson ID) ✔
@@ -211,7 +215,9 @@ Status: Tested and verified (see `TEST.md`).
 - **(backend)** Call OpenAI API in **streaming mode**
 - **(backend)** **SSE endpoint** (`GET /api/questions/<id>/stream/`) streams answer tokens
 - **(backend)** Persist full `QuestionAnswer` record after stream completes
+- **(backend)** Dashboard: lesson detail page with Q&A display (template ready) ✔
 - **(backend)** Dashboard: `EventSource` JS renders tokens live
+- **(extension)** Options page: Q&A display section (ready for Phase 4 answers) ✔
 - **(extension)** Popup: consume SSE stream and display latest Q&A
 
 ### Phase 5 — Lessons upload + OCR (optional)

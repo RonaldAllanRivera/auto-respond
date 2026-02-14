@@ -24,14 +24,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extension options page: full pairing flow (enter code → call API → store token → show paired state).
   - Extension background.js: authenticated `apiFetch` helper using `X-Device-Token` header.
   - Tailwind-styled devices dashboard template with pairing code display and device list.
-- Phase 3: Meet captions ingestion + question detection (backend):
-  - Device token auth decorator (`devices/auth.py`): `@require_device_token` for API views.
-  - `POST /api/captions/` — ingest caption events with server-side SHA-256 dedupe.
-  - `POST /api/questions/` — submit detected questions (answer placeholder for Phase 4).
-  - Lesson model: added `meeting_id` + `meeting_date` with unique constraint for auto-create dedup.
-  - TranscriptChunk model: added `content_hash` with unique constraint for server-side dedupe.
-  - Auto-create lesson per meeting ID + date; manual lesson selection via `lesson_id` param.
-  - Admin updated with new fields and filters.
+- Phase 3: Meet captions ingestion + question detection:
+  - **(backend)** Device token auth decorator (`devices/auth.py`): `@require_device_token` for API views.
+  - **(backend)** `POST /api/captions/` — ingest caption events with server-side SHA-256 dedupe.
+  - **(backend)** `POST /api/questions/` — submit detected questions (answer placeholder for Phase 4).
+  - **(backend)** Lesson model: added `meeting_id` + `meeting_date` with unique constraint for auto-create dedup.
+  - **(backend)** TranscriptChunk model: added `content_hash` with unique constraint for server-side dedupe.
+  - **(backend)** Auto-create lesson per meeting ID + date; manual lesson selection via `lesson_id` param.
+  - **(backend)** Admin updated with new fields and filters.
+  - **(extension)** Content script rewrite: MutationObserver on Google Meet caption DOM with 4 fallback selectors.
+  - **(extension)** Client-side dedupe (exact + substring match) and cooldown (2s captions, 5s questions).
+  - **(extension)** Question detection: 16 interrogative keywords + `?` fallback, sliding buffer (2000 chars).
+  - **(extension)** Auto-extracts meeting ID from URL and meeting title from page.
+  - **(extension)** Posts `CAPTION` and `QUESTION` messages to background.js → backend API.
+  - **(extension)** Content script rewrite v2: correct Google Meet DOM selectors (`TEjq6e`, `.iTTPOb`, `.zs7s8d.jxFHg`), wait-for-call flow, caption settle timer, CC toggle detection.
+  - **(extension)** Options page: live activity log (polls `chrome.storage.local` every 2s) and Q&A display section.
+  - **(backend)** Lesson detail view (`/lessons/<id>/`) with transcript + Q&A display.
+  - **(backend)** Dashboard lessons list now clickable with chunk/Q&A counts.
 
 ### Fixed
 - Static assets (admin CSS/JS) failing with MIME type errors: added WhiteNoise, configured `STATICFILES_STORAGE`, and run `collectstatic` at container start.
