@@ -52,6 +52,7 @@ Desktop app responsibilities:
 - Send full OCR text to `POST /api/captions/` for transcript storage.
 - Send detected questions to `POST /api/questions/` for AI answering.
 - Show **pairing status** and **activity log** only (no AI answers — those are on the dashboard).
+- Periodically re-validate device token (~30s) and auto-unpair when backend access is revoked (e.g., subscription inactive).
 - One-time pairing flow (subscriber copies a pairing code from the web dashboard).
 
 ### 3.3 Real-time Q&A flow
@@ -218,10 +219,14 @@ Use Django Admin as the primary CMS:
 - **(backend)** Dashboard lesson detail page with SSE streaming Q&A display ✓
 - **(backend)** `EventSource` JS renders answer tokens live ✓
 
-### Phase 5 — Stripe subscriptions (monthly)
-- Stripe Checkout Session creation
-- Stripe webhook handler + subscription sync
-- Entitlement checks on caption ingest and AI answering
+### Phase 5 — Stripe subscriptions (monthly) (Completed)
+- Flat monthly plan: $15.00 USD ✓
+- Stripe Checkout Session creation ✓
+- Stripe webhook handler + subscription sync ✓
+- Entitlement checks on AI answering ✓
+- Auto-revoke paired devices on `/devices/` when subscription is inactive/ended ✓
+- Billing subscribe page UX emphasizes importance with pricing clarity, trust signals, and next steps ✓
+- Billing portal session flow ✓
 
 ### Phase 6 — Coupons (admin CMS)
 - `Coupon` model + Django Admin
@@ -245,7 +250,7 @@ Use Django Admin as the primary CMS:
 - Keep Django as API/admin service while Next.js handles subscriber UI.
 - Preserve current API contract and parity for lessons, transcripts, Q&A streaming, settings, devices, and billing views.
 
-## 11) Testing the desktop app (Phase 2–4)
+## 11) Testing (Phase 2-5)
 
 ### 11.1 Prerequisites
 
@@ -501,6 +506,50 @@ Run through the complete flow in one session:
 | Print Screen not detected | On some Linux DEs, Print Screen is intercepted by the screenshot tool. Try running with `sudo` or disable the system screenshot shortcut |
 | `tkinter` not found | Install: `sudo apt install python3-tk` |
 | No AI answer returned | Ensure `OPENAI_API_KEY` is set in `.env` and Docker is restarted |
+
+### 11.7 Phase 5 — Stripe subscriptions + webhook sync
+
+**Prerequisites:**
+
+- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` set in root `.env`
+- Billing Plan configured in Django Admin with valid `stripe_monthly_price_id`
+- Webhook forwarder running locally (Stripe CLI)
+
+Start local webhook forwarding (Docker Stripe CLI):
+
+```bash
+docker run --rm -it --network=host \
+  -v "$HOME/.config/stripe:/root/.config/stripe" \
+  stripe/stripe-cli:latest listen --forward-to http://localhost:8000/billing/webhook/
+```
+
+**Test: Checkout flow**
+
+1. Log in to `http://localhost:8000/`
+2. Open `http://localhost:8000/billing/subscribe/`
+3. Click **Subscribe monthly** and complete Stripe Checkout in test mode
+4. Expected:
+   - Redirect to `/billing/success/`
+   - Webhook delivery visible in Stripe CLI output
+   - `StripeCustomer`, `StripeSubscription`, and `StripeEvent` records update in Django Admin
+
+**Test: Entitlement enforcement**
+
+1. Use a user without active subscription
+2. Call `POST /api/questions/`
+3. Expected: `403` with `{"error": "Subscription required"}`
+4. Activate subscription and retry
+5. Expected: AI answer flow succeeds
+
+**Test: Device auto-revocation on inactive subscription**
+
+1. Pair at least one desktop device while subscription is active
+2. Move subscription to inactive/ended state in Stripe Test mode
+3. Visit `/devices/`
+4. Expected:
+   - active devices are auto-revoked
+   - pairing code generation is disabled
+   - API pairing exchange returns `403` (`{"error": "Subscription required"}`)
 
 ## 12) Non-goals (for MVP)
 

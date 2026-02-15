@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SaaS roadmap: Google login, Stripe subscriptions (monthly), coupon codes, and Render deployment (see `PLAN.md`).
 - Fresh Django SaaS-first scaffold with separate apps (`accounts`, `billing`, `devices`, `lessons`).
 - Docker Compose local development stack (Django + Postgres).
+- Phase 5 billing implementation:
+  - Stripe SDK dependency (`stripe==7.13.0`).
+  - Billing endpoints: `/billing/subscribe/`, `/billing/checkout/`, `/billing/portal/`, `/billing/webhook/`.
+  - Stripe models: `StripeCustomer`, `StripeSubscription`, `StripeEvent` + migration `billing.0002_stripe_models`.
+  - Billing templates for subscribe/success/cancel flows.
+  - Subscription CTA in dashboard + subscription nav link.
+  - Webhook idempotency tracking and subscription sync in admin.
 
 ### Changed
 - **Architecture pivot**: replaced Chrome Extension with Python desktop app (`desktop/`).
@@ -64,9 +71,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Desktop capture flow working with Linux clipboard watcher fallback.
   - AI answers verified from desktop-submitted questions in dashboard and Django Admin records.
 
+- Phase 5 completed (2026-02-15):
+  - Flat monthly Stripe plan standardized at $15.00 USD.
+  - Checkout session creation for recurring monthly subscriptions.
+  - Webhook signature verification and Stripe event de-duplication.
+  - Subscription entitlement enforcement on AI answering endpoints.
+  - Device subscription enforcement hardening:
+    - `/devices/` auto-revokes active devices when subscription is inactive/ended.
+    - Pairing code generation and pairing exchange require active subscription when billing is configured.
+  - Billing subscribe page UX refresh:
+    - Emphasizes subscription importance with clear status + action-required messaging.
+    - Shows pricing details, trust signals, and next-step guidance.
+  - django-allauth redirect customization for post-signup/login billing UX.
+  - Docker compose updated to pass Stripe env vars to web container.
+  - Documentation expanded with Stripe webhook tutorials (local + production).
+
 - Desktop capture reliability + detector hardening:
   - Added clipboard watcher fallback for Linux/DE environments where `Print Screen` is intercepted.
   - Added adaptive clipboard polling backoff to reduce idle UI wakeups/CPU activity.
+  - Added periodic (~30s) backend token re-validation to auto-unpair when device access is revoked.
   - Updated detector to ignore URL/browser UI OCR noise (e.g. `docs.google.com/.../edit?`).
   - Question detection now prefers WH-start questions (with optional `?`) and math expressions.
   - Added fraction math detection support (e.g. `1/4 x 1/5`).

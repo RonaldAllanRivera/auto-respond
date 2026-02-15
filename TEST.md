@@ -1,10 +1,11 @@
-# Testing Guide (Phase 1–4)
+# Testing Guide (Phase 1-5)
 
 Status:
 - Phase 1 verified — 2026-02-14 (Google login, user dashboard, admin login/pages)
 - Phase 2 verified — 2026-02-14 (device pairing UI + API)
 - Phase 3 verified — 2026-02-14 (desktop capture pipeline + backend APIs, including Linux clipboard watcher fallback)
 - Phase 4 verified — 2026-02-14 (AI answering + SSE streaming; answers visible on dashboard and in Django Admin records)
+- Phase 5 verified — 2026-02-15 (Stripe Checkout subscription flow, webhook sync, entitlement checks)
 
 Summary of what was validated:
 - Google OAuth login via django-allauth
@@ -17,6 +18,8 @@ Summary of what was validated:
 - `POST /api/questions/` — question submission with AI answering (OpenAI)
 - `GET /api/questions/<id>/stream/` — SSE streaming of AI answer tokens
 - Device token auth (`X-Device-Token` header) — 401 on missing/invalid tokens
+- Billing endpoints: `/billing/subscribe/`, `/billing/checkout/`, `/billing/portal/`, `/billing/webhook/`
+- Subscription enforcement on AI answering when billing is configured
 
 ## 0) Prerequisites
 
@@ -148,6 +151,10 @@ python main.py
 5. Click **Unpair** and confirm capture is blocked:
    - manual capture button is disabled
    - Print Screen logs: "Not paired — pair your device first to enable capture"
+6. Verify auto-unpair on backend revocation (no capture required):
+   - revoke the device in the dashboard or make the subscription inactive
+   - wait ~30s
+   - expected: desktop app clears pairing and shows "Not paired" without any manual action
 6. Open dashboard → click the lesson → see Q&A with AI answers
 
 ## 10) Test desktop app question detection
@@ -159,9 +166,80 @@ The detector finds questions via:
 
 To test without a screenshot, use the API directly (step 7 above).
 
-## What's next (Phase 5)
+## 11) Test Stripe subscriptions (Phase 5)
 
-- Stripe subscriptions:
-  - Checkout Session creation
-  - Webhook handler + subscription sync
-  - Entitlement checks on AI answering
+### 11a) Prerequisites
+
+- Root `.env` contains `STRIPE_SECRET_KEY`
+- Root `.env` contains `STRIPE_WEBHOOK_SECRET`
+- `BillingPlan` in Django Admin has a valid `stripe_monthly_price_id` (`price_...`)
+- Billing plan is configured as flat monthly price: **$15.00 USD**
+- Stripe webhook forwarding is running:
+
+```bash
+docker run --rm -it --network=host \
+  -v "$HOME/.config/stripe:/root/.config/stripe" \
+  stripe/stripe-cli:latest listen --forward-to http://localhost:8000/billing/webhook/
+```
+
+### 11b) Checkout flow
+
+1. Log in to dashboard
+2. Open `/billing/subscribe/`
+3. Click **Subscribe now**
+4. Complete Stripe Checkout in test mode
+5. Expected:
+   - Redirect to `/billing/success/`
+   - Stripe webhook events are received
+   - User gets a synced `StripeSubscription` row in Django Admin
+
+### 11c) Webhook sync checks
+
+Expected in Django Admin:
+
+- Billing → Stripe events: new events recorded (idempotent)
+- Billing → Stripe subscriptions: status updates (`active`/`trialing`/etc.)
+
+Optional test events:
+
+```bash
+docker run --rm -it --network=host \
+  -v "$HOME/.config/stripe:/root/.config/stripe" \
+  stripe/stripe-cli:latest trigger customer.subscription.updated
+
+docker run --rm -it --network=host \
+  -v "$HOME/.config/stripe:/root/.config/stripe" \
+  stripe/stripe-cli:latest trigger invoice.payment_failed
+```
+
+### 11d) Entitlement checks
+
+When billing is configured and user has no active subscription:
+
+- `POST /api/questions/` returns `403` with `{"error": "Subscription required"}`
+- SSE endpoint returns `subscription_required` event for unanswered questions
+
+When subscription is active:
+
+- `POST /api/questions/` succeeds and returns AI answer payload as usual
+
+### 11e) Device auto-revoke on inactive subscription
+
+When billing is configured and user has no active subscription:
+
+1. Open `/devices/`
+2. Expected:
+   - Active paired devices are automatically revoked
+   - Pairing code generation is disabled
+   - UI shows subscription-required notice
+3. `POST /api/devices/pair/` with a valid code returns `403` with `{"error": "Subscription required"}`
+
+When subscription becomes active again:
+
+- User can generate a new pairing code and re-pair desktop device(s)
+
+## What's next (Phase 6)
+
+- Coupons:
+  - Coupon model + admin workflows
+  - Coupon application in Checkout

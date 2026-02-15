@@ -113,6 +113,9 @@ ACCOUNT_AUTHENTICATION_METHOD = "username_email"
 ACCOUNT_EMAIL_VERIFICATION = "none"
 SOCIALACCOUNT_LOGIN_ON_GET = True
 
+ACCOUNT_ADAPTER = "accounts.adapters.MeetLessonsAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "accounts.adapters.MeetLessonsSocialAccountAdapter"
+
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "SCOPE": ["profile", "email"],

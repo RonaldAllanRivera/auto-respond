@@ -33,6 +33,7 @@ class MeetLessonsApp:
     _CLIPBOARD_POLL_MS_MIN = 900
     _CLIPBOARD_POLL_MS_MAX = 4000
     _CLIPBOARD_POLL_BACKOFF_MULT = 1.35
+    _PAIRING_REVALIDATE_MS = 30_000
 
     def __init__(self):
         self.root = tk.Tk()
@@ -44,6 +45,8 @@ class MeetLessonsApp:
         self._hotkey_listener = None
         self._processing = False
         self._clipboard_job = None
+        self._pairing_revalidate_job = None
+        self._pairing_revalidate_running = False
         self._clipboard_last_sig = None
         self._clipboard_seen = deque(maxlen=200)
         self._pending_clipboard_image = None
@@ -52,6 +55,7 @@ class MeetLessonsApp:
 
         self._build_ui()
         self._refresh_pairing_status()
+        self._start_pairing_revalidation()
         self._start_hotkey_listener()
         self._start_clipboard_watcher()
 
@@ -133,8 +137,32 @@ class MeetLessonsApp:
 
     # ------------------------------------------------------------------ Pairing
 
+    @staticmethod
+    def _is_backend_auth_failure_reason(reason: str) -> bool:
+        return (
+            "Invalid or revoked device token" in reason
+            or "Subscription required" in reason
+            or "HTTP 401" in reason
+            or "HTTP 403" in reason
+        )
+
     def _refresh_pairing_status(self):
         if config.is_paired():
+            valid, reason = api_client.validate_device_token()
+            auth_failure = not valid and self._is_backend_auth_failure_reason(reason)
+            if auth_failure:
+                config.clear_device()
+                self.pair_status_var.set("Not paired — enter a pairing code from the dashboard")
+                self.code_entry.configure(state=tk.NORMAL)
+                self.pair_btn.configure(state=tk.NORMAL)
+                self.unpair_btn.configure(state=tk.DISABLED)
+                self.capture_btn.configure(state=tk.DISABLED)
+                self.capture_status_var.set("Pair device to enable capture")
+                self._log(
+                    f"Pairing cleared by backend policy ({reason}). Subscribe and pair again if needed."
+                )
+                return
+
             device_id = config.get("device_id", "")
             short_id = device_id[:8] if device_id else "?"
             self.pair_status_var.set(f"✓ Paired (device {short_id}...)")
@@ -173,6 +201,71 @@ class MeetLessonsApp:
         config.clear_device()
         self._log("Device unpaired.")
         self._refresh_pairing_status()
+
+    def _handle_backend_auth_error(self, err: Exception) -> bool:
+        if not isinstance(err, api_client.BackendAPIError):
+            return False
+        if err.status_code not in (401, 403):
+            return False
+
+        config.clear_device()
+        message = (
+            f"Device access revoked by backend ({err}). "
+            "Please subscribe (if needed) and pair again."
+        )
+        self.root.after(0, lambda: self._log(message))
+        self.root.after(0, self._refresh_pairing_status)
+        return True
+
+    def _start_pairing_revalidation(self):
+        if self._pairing_revalidate_job is not None:
+            return
+        self._pairing_revalidate_job = self.root.after(
+            self._PAIRING_REVALIDATE_MS,
+            self._run_pairing_revalidation,
+        )
+
+    def _stop_pairing_revalidation(self):
+        job = self._pairing_revalidate_job
+        self._pairing_revalidate_job = None
+        if job is None:
+            return
+        try:
+            self.root.after_cancel(job)
+        except Exception:
+            pass
+
+    def _schedule_pairing_revalidation(self):
+        if self._pairing_revalidate_job is not None:
+            return
+        self._pairing_revalidate_job = self.root.after(
+            self._PAIRING_REVALIDATE_MS,
+            self._run_pairing_revalidation,
+        )
+
+    def _run_pairing_revalidation(self):
+        self._pairing_revalidate_job = None
+
+        if self._pairing_revalidate_running or not config.is_paired():
+            self._schedule_pairing_revalidation()
+            return
+
+        self._pairing_revalidate_running = True
+        threading.Thread(target=self._pairing_revalidation_worker, daemon=True).start()
+
+    def _pairing_revalidation_worker(self):
+        try:
+            valid, reason = api_client.validate_device_token()
+            if not valid and self._is_backend_auth_failure_reason(reason):
+                self.root.after(0, self._refresh_pairing_status)
+        except Exception:
+            pass
+        finally:
+            self.root.after(0, self._finish_pairing_revalidation)
+
+    def _finish_pairing_revalidation(self):
+        self._pairing_revalidate_running = False
+        self._schedule_pairing_revalidation()
 
     # ------------------------------------------------------------------ Hotkey
 
@@ -343,7 +436,9 @@ class MeetLessonsApp:
                     f"chunk {result.get('chunk_id')}, new={result.get('created')}"
                 ))
             except Exception as e:
-                self.root.after(0, lambda: self._log(f"Caption send error: {e}"))
+                if self._handle_backend_auth_error(e):
+                    return
+                self.root.after(0, lambda e=e: self._log(f"Caption send error: {e}"))
 
             questions = detector.detect_questions(payload_text)
             if questions:
@@ -359,12 +454,14 @@ class MeetLessonsApp:
                             f"Question sent → ID {r.get('question_id')}: {q[:60]}"
                         ))
                     except Exception as e:
+                        if self._handle_backend_auth_error(e):
+                            return
                         self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
             else:
                 self.root.after(0, lambda: self._log("No questions detected in this capture"))
 
         except Exception as e:
-            self.root.after(0, lambda: self._log(f"Capture error: {e}"))
+            self.root.after(0, lambda e=e: self._log(f"Capture error: {e}"))
         finally:
             self._processing = False
             self.root.after(0, lambda: self.capture_status_var.set("Press Print Screen to capture"))
@@ -424,6 +521,7 @@ class MeetLessonsApp:
     def _on_close(self):
         if self._hotkey_listener:
             self._hotkey_listener.stop()
+        self._stop_pairing_revalidation()
         self._stop_clipboard_watcher()
         self.root.destroy()
 

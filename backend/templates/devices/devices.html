@@ -3,6 +3,18 @@
 {% block content %}
 <div class="space-y-8">
 
+  {% if billing_enforced and not subscription_active %}
+    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <p class="font-semibold">Subscription required for device pairing and capture.</p>
+      {% if auto_revoked_count %}
+        <p class="mt-1">Auto-revoked {{ auto_revoked_count }} active device{% if auto_revoked_count != 1 %}s{% endif %} because no active subscription was found.</p>
+      {% else %}
+        <p class="mt-1">No active subscription detected. Pairing stays disabled until your subscription is active again.</p>
+      {% endif %}
+      <p class="mt-2"><a href="/billing/subscribe/" class="font-medium underline">Go to Subscription</a></p>
+    </div>
+  {% endif %}
+
   <div class="flex items-center justify-between">
     <h1 class="text-2xl font-bold text-slate-900">Paired Devices</h1>
   </div>
@@ -39,6 +51,8 @@
           tick();
         })();
       </script>
+    {% elif billing_enforced and not subscription_active %}
+      <p class="mt-4 text-sm text-slate-600">Pairing is disabled until your subscription is active.</p>
     {% else %}
       <form method="post" action="{% url 'generate_pairing_code' %}" class="mt-4">
         {% csrf_token %}

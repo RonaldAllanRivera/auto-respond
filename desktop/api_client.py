@@ -13,6 +13,24 @@ import config
 TIMEOUT = 10  # seconds
 
 
+class BackendAPIError(RuntimeError):
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _response_error(resp: requests.Response) -> BackendAPIError:
+    message = f"HTTP {resp.status_code}"
+    try:
+        data = resp.json()
+        if isinstance(data, dict) and data.get("error"):
+            message = str(data["error"])
+    except ValueError:
+        if resp.text:
+            message = resp.text.strip()
+    return BackendAPIError(message, status_code=resp.status_code)
+
+
 def _base_url() -> str:
     return config.get("backend_url", "http://localhost:8000").rstrip("/")
 
@@ -38,7 +56,8 @@ def pair_device(code: str, label: str = "Desktop App") -> dict:
         json={"code": code.strip().upper(), "label": label},
         timeout=TIMEOUT,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise _response_error(resp)
     data = resp.json()
 
     # Persist credentials
@@ -66,7 +85,8 @@ def send_caption(text: str, speaker: str = "", meeting_id: str = "",
         headers=_headers(),
         timeout=TIMEOUT,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise _response_error(resp)
     return resp.json()
 
 
@@ -89,7 +109,8 @@ def send_question(question: str, context: str = "", meeting_id: str = "",
         headers=_headers(),
         timeout=30,  # longer timeout for AI answering
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise _response_error(resp)
     return resp.json()
 
 
@@ -103,3 +124,34 @@ def check_connection() -> bool:
         return resp.status_code in (200, 405)
     except requests.RequestException:
         return False
+
+
+def validate_device_token() -> tuple[bool, str]:
+    """Return (is_valid, reason). Uses /api/captions/ auth path without creating data."""
+    token = config.get("device_token", "")
+    if not token:
+        return False, "No device token configured"
+
+    url = f"{_base_url()}/api/captions/"
+    try:
+        resp = requests.post(
+            url,
+            json={"text": ""},  # valid auth path; backend returns 400 for missing caption text when token is valid
+            headers=_headers(),
+            timeout=TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        return False, str(exc)
+
+    if resp.status_code in (401, 403):
+        return False, _response_error(resp).args[0]
+
+    if resp.status_code == 400:
+        try:
+            data = resp.json()
+        except ValueError:
+            data = {}
+        if isinstance(data, dict) and data.get("error") == "Missing caption text":
+            return True, ""
+
+    return resp.ok, ""

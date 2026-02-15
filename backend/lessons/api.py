@@ -19,6 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from accounts.models import SubscriberProfile
+from billing.entitlements import user_has_active_subscription
 from devices.auth import require_device_token
 
 from .ai import answer_question, answer_question_streaming
@@ -207,6 +208,9 @@ def api_questions(request: HttpRequest) -> JsonResponse:
     # Get user preferences for AI prompt
     profile = SubscriberProfile.get_for_user(request.user)
 
+    if not user_has_active_subscription(request.user):
+        return JsonResponse({"error": "Subscription required"}, status=403)
+
     # Gather recent transcript context from the lesson
     full_context = context
     if lesson:
@@ -267,6 +271,14 @@ def api_question_stream(request: HttpRequest, question_id: int) -> StreamingHttp
             yield f"data: {json.dumps({'token': qa.answer, 'done': True})}\n\n"
         return StreamingHttpResponse(
             already_answered(),
+            content_type="text/event-stream",
+        )
+
+    if not user_has_active_subscription(request.user):
+        def not_subscribed():
+            yield f"data: {json.dumps({'error': 'subscription_required', 'done': True})}\n\n"
+        return StreamingHttpResponse(
+            not_subscribed(),
             content_type="text/event-stream",
         )
 

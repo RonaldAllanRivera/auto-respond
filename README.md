@@ -15,6 +15,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - [Tech stack](#tech-stack)
 - [API contract (desktop ↔ backend)](#api-contract-desktop--backend)
 - [Quickstart (local)](#quickstart-local)
+- [Stripe subscriptions (setup guide)](#stripe-subscriptions-setup-guide)
 - [Validation summary (verified)](#validation-summary-verified)
 - [Troubleshooting](#troubleshooting)
 - [What’s next](#whats-next)
@@ -62,6 +63,10 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
   - URL/UI noise filtering (e.g., `docs.google.com/.../edit?` is ignored)
 - AI answers stored and streamed in dashboard (SSE)
 - Desktop paywall behavior: capture blocked while unpaired
+- Stripe monthly subscriptions (Checkout + webhooks + customer portal)
+- Entitlement checks for AI answering when billing is enabled
+- Devices auto-revoke on `/devices/` when subscription is inactive
+- Desktop auto-unpairs if the backend revokes access (including periodic ~30s token re-validation)
 
 ---
 
@@ -74,7 +79,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 2 — Device pairing + security | Completed |
 | 3 — Screenshot capture + OCR + question detection | Completed |
 | 4 — AI answering (streaming) | Completed |
-| 5 — Stripe subscriptions | Planned |
+| 5 — Stripe subscriptions | Completed |
 | 6 — Coupons (admin CMS) | Planned |
 | 7 — Render production hardening | Planned |
 
@@ -90,6 +95,7 @@ See `PLAN.md` for detailed phased deliverables.
 - django-allauth (Google OAuth)
 - WhiteNoise (static files)
 - OpenAI API
+- Stripe API
 
 ### Desktop
 - Python + tkinter
@@ -135,6 +141,7 @@ Copy `.env.example` → `.env` and set:
 - `DJANGO_SECRET_KEY`
 - `DEVICE_TOKEN_SECRET`
 - `OPENAI_API_KEY`
+- `STRIPE_SECRET_KEY` (required when testing billing)
 
 Copy `desktop/.env.example` → `desktop/.env`:
 
@@ -170,11 +177,253 @@ python -m venv .venv
 
 ---
 
+## Stripe subscriptions (setup guide)
+
+This project uses **Stripe Checkout (subscription mode)** for recurring payments, a **Stripe webhook** to sync subscription status, and the **Stripe customer portal** for managing/canceling.
+
+Current billing offer:
+
+- **Flat rate: $15.00/month** (single monthly plan)
+
+### Recommended workflow (best practice)
+
+1. Use **Stripe Test mode** for development and end-to-end verification.
+2. Switch to **Live mode** only after:
+   - webhooks are verified in production
+   - you’ve tested cancel/payment-failed flows
+   - your production domain + HTTPS are configured
+
+### Required env vars
+
+In root `.env` (backend):
+
+- `STRIPE_SECRET_KEY=sk_test_...`
+- `STRIPE_WEBHOOK_SECRET=whsec_...`
+
+### Create a Product + recurring Price
+
+In Stripe Dashboard (Test mode):
+
+1. Create a **Product**
+2. Create a **Recurring Price** (monthly, flat rate **$15.00 USD**)
+3. Copy the **Price ID** (`price_...`)
+4. In Django Admin, set it on the `BillingPlan` record:
+   - Admin → Billing → Billing plans → id=1 → `stripe_monthly_price_id=price_...`
+
+### Local webhook forwarding (Stripe CLI)
+
+The local webhook endpoint in this app is:
+
+- `http://localhost:8000/billing/webhook/`
+
+Docker Compose now includes a `stripe-cli` service that forwards webhooks to Django automatically.
+
+One-time auth setup:
+
+```bash
+docker compose run --rm stripe-cli login
+```
+
+Then start the stack normally (includes webhook forwarding):
+
+```bash
+docker compose up --build
+```
+
+View Stripe listener logs:
+
+```bash
+docker compose logs -f stripe-cli
+```
+
+Use Stripe CLI to forward webhooks to your local Docker backend:
+
+```bash
+stripe login
+stripe listen --forward-to http://localhost:8000/billing/webhook/
+```
+
+If Stripe CLI is not installed on your host machine, use Docker instead:
+
+```bash
+docker run --rm -it --network=host \
+  -v "$HOME/.config/stripe:/root/.config/stripe" \
+  stripe/stripe-cli:latest login
+
+docker run --rm -it --network=host \
+  -v "$HOME/.config/stripe:/root/.config/stripe" \
+  stripe/stripe-cli:latest listen --forward-to http://localhost:8000/billing/webhook/
+```
+
+The CLI will print a signing secret like `whsec_...`.
+Copy that into your local `.env` as `STRIPE_WEBHOOK_SECRET`.
+
+### Webhook tutorial (end-to-end)
+
+This app's webhook handler is:
+
+- `POST /billing/webhook/`
+
+It verifies the Stripe signature using `STRIPE_WEBHOOK_SECRET` and de-dupes events in the database.
+
+#### Local development (recommended)
+
+1. Start backend:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `db`
+- `web`
+- `stripe-cli` (automatic local webhook forwarding to `/billing/webhook/`)
+
+2. (Optional) If not using Compose `stripe-cli` service, start Stripe CLI forwarding manually:
+
+```bash
+stripe login
+stripe listen --forward-to http://localhost:8000/billing/webhook/
+```
+
+3. Copy the signing secret printed by Stripe CLI into `.env`:
+
+```bash
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+4. Restart backend so the new env var is loaded:
+
+```bash
+docker compose up --build
+```
+
+#### Send test events (Stripe CLI)
+
+In another terminal, you can emit Stripe test events:
+
+```bash
+stripe trigger checkout.session.completed
+stripe trigger customer.subscription.updated
+stripe trigger invoice.paid
+stripe trigger invoice.payment_failed
+```
+
+Then inspect:
+
+- Docker logs: `docker compose logs --tail=200 web`
+- Django Admin tables:
+  - Billing → Stripe events
+  - Billing → Stripe subscriptions
+
+#### Stripe Dashboard webhook vs Stripe CLI
+
+- Stripe Dashboard webhooks **cannot** call `localhost`.
+- For local development, use **Stripe CLI forwarding**.
+- For staging/production, you **must manually add** a Dashboard webhook endpoint with a real HTTPS URL:
+  - `https://your-domain.com/billing/webhook/`
+- Local-only rule:
+  - If you are using `stripe listen --forward-to ...`, you do **not** need to add a Dashboard endpoint for localhost.
+
+#### Production webhook setup
+
+Stripe Dashboard → Developers → Webhooks:
+
+1. Add endpoint URL: `https://your-domain.com/billing/webhook/`
+2. Subscribe to the events listed below
+3. Copy the endpoint signing secret (`whsec_...`) into production env as `STRIPE_WEBHOOK_SECRET`
+4. Use a separate endpoint for Test mode and Live mode (best practice)
+5. Keep Stripe webhook retries enabled (default) and monitor failed deliveries
+
+#### Common failure modes
+
+- If `web` container crashes with `ModuleNotFoundError: stripe`:
+  - rebuild: `docker compose up --build`
+- If you see signature verification errors:
+  - confirm you copied the correct `whsec_...` for the environment (CLI vs Dashboard, Test vs Live)
+- If subscription status never updates:
+  - confirm Stripe is actually sending events (CLI shows deliveries)
+  - confirm the `BillingPlan.stripe_monthly_price_id` is set to your `price_...`
+
+### Stripe webhook events to enable
+
+Configure your webhook endpoint to send at least:
+
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.paid`
+- `invoice.payment_failed`
+
+### What you need to do next (Stripe + local verification)
+
+1. **Create Stripe Product + Monthly Price** (Test mode), then save `price_...` to Django Admin BillingPlan.
+2. **Set local env vars** in root `.env`:
+   - `STRIPE_SECRET_KEY=sk_test_...`
+   - `STRIPE_WEBHOOK_SECRET=whsec_...` (from Stripe CLI output)
+3. **Run local webhook forwarding**:
+
+```bash
+stripe listen --forward-to http://localhost:8000/billing/webhook/
+```
+
+4. **Verify local subscription flow**:
+   - open `/billing/subscribe/`
+   - complete Checkout in test mode
+   - confirm `StripeEvent` + `StripeSubscription` updated in Django Admin
+   - confirm entitlement checks on `/api/questions/`
+   - visit `/devices/` while unsubscribed and confirm active devices auto-revoke
+5. **Before production cutover**:
+   - add Dashboard webhook endpoint: `https://your-domain.com/billing/webhook/`
+   - enable minimum events:
+     - `checkout.session.completed`
+     - `customer.subscription.created`
+     - `customer.subscription.updated`
+     - `customer.subscription.deleted`
+     - `invoice.paid`
+     - `invoice.payment_failed`
+   - set production `STRIPE_WEBHOOK_SECRET` from Dashboard endpoint secret (not CLI secret)
+   - repeat one full subscription test in production/Test endpoint before enabling Live billing
+
+### Customer portal
+
+Stripe Dashboard → Settings → Billing → Customer portal:
+
+- Enable portal
+- Enable subscription cancellation and payment method updates (recommended)
+
+### Device access policy tied to subscription
+
+When billing is configured:
+
+- Users without an active subscription cannot generate or use pairing codes.
+- Visiting `/devices/` auto-revokes active paired devices when subscription is inactive/ended.
+- Reactivating subscription requires generating a new pairing code and re-pairing desktop device(s).
+
+Desktop behavior:
+
+- The desktop app periodically re-validates its device token (~30s) and will auto-unpair if the backend revokes the token or the subscription becomes inactive.
+
+### Subscription UX
+
+Best-practice user flow:
+
+1. User signs up / logs in
+2. User visits `/billing/subscribe/`
+3. Checkout creates subscription
+4. Webhook syncs subscription state
+5. AI answering endpoints enforce entitlement when billing is configured
+
+---
+
 ## Validation summary (verified)
 
 - Desktop capture pipeline is working end-to-end
 - AI answers are visible in dashboard and persisted in Django Admin
 - Device pairing, dashboard, admin pages, and auth flows are working
+- Stripe Checkout + webhook sync verified in local test mode
 
 Detailed test checklist: `TEST.md`
 
@@ -202,7 +451,6 @@ File: `desktop/main.py`
 
 ## What’s next
 
-- Stripe subscriptions (Checkout + webhook sync + entitlement checks)
 - Coupon management in Admin
 - Render production hardening
 

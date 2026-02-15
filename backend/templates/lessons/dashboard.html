@@ -6,6 +6,18 @@
     <h1 class="text-2xl font-bold text-slate-900">Your Lessons</h1>
   </div>
 
+  {% if billing_enabled and not subscribed %}
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div class="font-medium text-amber-900">Subscription required for AI answers</div>
+          <div class="text-sm text-amber-800">Subscribe to enable automatic answers for detected questions.</div>
+        </div>
+        <a href="/billing/subscribe/" class="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Subscribe</a>
+      </div>
+    </div>
+  {% endif %}
+
   {% if lessons %}
     <div class="space-y-3">
       {% for l in lessons %}

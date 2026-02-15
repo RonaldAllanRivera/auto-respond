@@ -55,7 +55,7 @@ You should also configure database variables from Render Postgres.
 - `OPENAI_MODEL`: default `gpt-4o-mini`
 - `OPENAI_TIMEOUT_SECONDS`: default `15`
 
-## SaaS roadmap variables (used in later phases)
+## SaaS variables
 
 ### Google OAuth
 
@@ -71,10 +71,34 @@ Notes:
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 
+Notes:
+
+- `STRIPE_SECRET_KEY` is required when testing billing locally.
+- `STRIPE_WEBHOOK_SECRET` is required for webhook signature verification.
+- For local development, this value usually comes from Stripe CLI forwarding output (`whsec_...`).
+
+Local webhook forwarding (Docker Stripe CLI):
+
+```bash
+docker run --rm -it --network=host \
+  -v "$HOME/.config/stripe:/root/.config/stripe" \
+  stripe/stripe-cli:latest listen --forward-to http://localhost:8000/billing/webhook/
+```
+
+Webhook endpoint used by Django:
+
+- `http://localhost:8000/billing/webhook/`
+
 Pricing notes:
 
-- This project will support a **Monthly subscription** in Stripe.
+- This project uses a **flat monthly subscription of $15.00 USD**.
 - The Stripe **Price ID** for that plan is configured via the Django Admin Billing Plan CMS (stored in the database), not via environment variables.
+- Device policy when billing is configured: users without an active subscription cannot pair devices, and active devices are auto-revoked on `/devices/`.
+
+Security notes:
+
+- Never commit real Stripe secret keys or webhook secrets to git.
+- Rotate secrets immediately if they are accidentally exposed.
 
 ## Device pairing
 
@@ -96,4 +120,5 @@ Notes:
 - The desktop app reads `MEET_LESSONS_URL` from `desktop/.env`.
 - No additional desktop environment variables are required for screenshot watcher/detection tuning; current tuning is code-level in `desktop/main.py`.
 - On Linux, the desktop app includes a clipboard watcher fallback so capture still works when `Print Screen` is intercepted by the desktop environment.
+- The desktop app periodically re-validates its device token (~30s) and will auto-unpair if the backend revokes the token or the subscription becomes inactive.
 - Question detection is intentionally strict: WH-start questions + math expressions (including fractions), with URL/UI OCR noise filtered out.

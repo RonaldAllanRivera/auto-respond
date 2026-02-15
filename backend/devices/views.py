@@ -8,6 +8,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from billing.entitlements import billing_is_configured, user_has_active_subscription
+
 from .models import Device, DevicePairingCode
 from .tokens import issue_token
 
@@ -20,19 +22,40 @@ from .tokens import issue_token
 @login_required
 def devices_view(request: HttpRequest) -> HttpResponse:
     """List paired devices and show active pairing code (if any)."""
+    billing_enforced = billing_is_configured()
+    subscription_active = user_has_active_subscription(request.user)
+    auto_revoked_count = 0
+
+    if billing_enforced and not subscription_active:
+        now = timezone.now()
+        auto_revoked_count = Device.objects.filter(user=request.user, revoked_at__isnull=True).update(revoked_at=now)
+        DevicePairingCode.objects.filter(
+            user=request.user,
+            used_at__isnull=True,
+            expires_at__gt=now,
+        ).update(expires_at=now)
+
     devices = Device.objects.filter(user=request.user).order_by("-created_at")
 
     # Find an active (unused + unexpired) pairing code
-    active_code = (
-        DevicePairingCode.objects.filter(user=request.user, used_at__isnull=True, expires_at__gt=timezone.now())
-        .order_by("-created_at")
-        .first()
-    )
+    active_code = None
+    if not billing_enforced or subscription_active:
+        active_code = (
+            DevicePairingCode.objects.filter(user=request.user, used_at__isnull=True, expires_at__gt=timezone.now())
+            .order_by("-created_at")
+            .first()
+        )
 
     return render(
         request,
         "devices/devices.html",
-        {"devices": devices, "active_code": active_code},
+        {
+            "devices": devices,
+            "active_code": active_code,
+            "billing_enforced": billing_enforced,
+            "subscription_active": subscription_active,
+            "auto_revoked_count": auto_revoked_count,
+        },
     )
 
 
@@ -40,6 +63,9 @@ def devices_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 def generate_pairing_code(request: HttpRequest) -> HttpResponse:
     """Generate a new pairing code for the logged-in user."""
+    if billing_is_configured() and not user_has_active_subscription(request.user):
+        return redirect("billing_subscribe")
+
     DevicePairingCode.generate(request.user)
     return redirect("devices")
 
@@ -88,6 +114,11 @@ def api_pair_device(request: HttpRequest) -> JsonResponse:
 
     if not pairing_code.is_valid():
         return JsonResponse({"error": "Pairing code expired or already used"}, status=410)
+
+    if billing_is_configured() and not user_has_active_subscription(pairing_code.user):
+        now = timezone.now()
+        Device.objects.filter(user=pairing_code.user, revoked_at__isnull=True).update(revoked_at=now)
+        return JsonResponse({"error": "Subscription required"}, status=403)
 
     # Mark code as used
     pairing_code.used_at = timezone.now()

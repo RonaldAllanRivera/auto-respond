@@ -33,6 +33,9 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
 
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+
       DEFAULT_GRADE_LEVEL: ${DEFAULT_GRADE_LEVEL:-3}
       DEFAULT_MAX_SENTENCES: ${DEFAULT_MAX_SENTENCES:-2}
     ports:
@@ -41,6 +44,15 @@ services:
       - db
     volumes:
       - ./backend:/app
+
+  stripe-cli:
+    image: stripe/stripe-cli:latest
+    command: listen --forward-to http://web:8000/billing/webhook/
+    depends_on:
+      - web
+    volumes:
+      - ${HOME}/.config/stripe:/root/.config/stripe
+    restart: unless-stopped
 
 volumes:
   pgdata:
