@@ -430,21 +430,23 @@ class MeetLessonsApp:
             self.root.after(0, lambda: self._log(f"OCR done ({ocr_ms}ms): {preview}..."))
 
             try:
+                questions = detector.detect_questions(payload_text)
+                if not questions:
+                    self.root.after(0, lambda: self._log(
+                        "No questions detected — not sending anything to the backend"
+                    ))
+                    return
+
+                self.root.after(0, lambda: self._log(
+                    f"Found {len(questions)} question(s): {questions[0][:80]}..."
+                ))
+
                 result = api_client.send_caption(text=payload_text, speaker="", meeting_title="Screen Capture")
                 self.root.after(0, lambda: self._log(
                     f"Caption sent → lesson {result.get('lesson_id')}, "
                     f"chunk {result.get('chunk_id')}, new={result.get('created')}"
                 ))
-            except Exception as e:
-                if self._handle_backend_auth_error(e):
-                    return
-                self.root.after(0, lambda e=e: self._log(f"Caption send error: {e}"))
 
-            questions = detector.detect_questions(payload_text)
-            if questions:
-                self.root.after(0, lambda: self._log(
-                    f"Found {len(questions)} question(s): {questions[0][:80]}..."
-                ))
                 for q in questions:
                     try:
                         result = api_client.send_question(
@@ -457,8 +459,10 @@ class MeetLessonsApp:
                         if self._handle_backend_auth_error(e):
                             return
                         self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
-            else:
-                self.root.after(0, lambda: self._log("No questions detected in this capture"))
+            except Exception as e:
+                if self._handle_backend_auth_error(e):
+                    return
+                self.root.after(0, lambda e=e: self._log(f"Send error: {e}"))
 
         except Exception as e:
             self.root.after(0, lambda e=e: self._log(f"Capture error: {e}"))
