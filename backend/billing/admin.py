@@ -20,7 +20,16 @@ class BillingPlanAdmin(admin.ModelAdmin):
 
 @admin.register(CouponCode)
 class CouponCodeAdmin(admin.ModelAdmin):
-    list_display = ("id", "code", "active", "stripe_promotion_code_id", "created_at")
+    list_display = (
+        "id",
+        "code",
+        "active",
+        "stripe_promotion_code_id",
+        "expires_at",
+        "max_redemptions",
+        "redeemed_count",
+        "created_at",
+    )
     list_filter = ("active",)
     search_fields = ("code",)
 

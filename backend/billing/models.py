@@ -1,7 +1,10 @@
-from django.core.validators import MaxValueValidator, MinValueValidator
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
+
+import stripe
 
 
 class BillingPlan(models.Model):
@@ -69,8 +72,77 @@ class CouponCode(models.Model):
     stripe_promotion_code_id = models.CharField(max_length=255, blank=True, default="")
     active = models.BooleanField(default=True)
 
+    expires_at = models.DateTimeField(null=True, blank=True)
+    max_redemptions = models.PositiveIntegerField(null=True, blank=True)
+    redeemed_count = models.PositiveIntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if self.code:
+            self.code = self.code.strip().upper()
+        if self.stripe_promotion_code_id:
+            self.stripe_promotion_code_id = self.stripe_promotion_code_id.strip()
+        super().save(*args, **kwargs)
+
+    def clean(self) -> None:
+        super().clean()
+
+        code = (self.code or "").strip()
+        if not code:
+            raise ValidationError({"code": "Coupon code cannot be empty."})
+
+        promo_id = (self.stripe_promotion_code_id or "").strip()
+        if promo_id:
+            if promo_id.startswith("promo_") or promo_id.startswith("coupon_"):
+                pass
+            elif settings.STRIPE_SECRET_KEY:
+                stripe.api_key = settings.STRIPE_SECRET_KEY
+
+                is_valid = False
+                try:
+                    stripe.PromotionCode.retrieve(promo_id)
+                    is_valid = True
+                except Exception:
+                    pass
+
+                if not is_valid:
+                    try:
+                        stripe.Coupon.retrieve(promo_id)
+                        is_valid = True
+                    except Exception:
+                        pass
+
+                if not is_valid:
+                    raise ValidationError(
+                        {
+                            "stripe_promotion_code_id": (
+                                "Enter a valid Stripe Promotion Code ID or Coupon ID. "
+                                "In Stripe: create a Promotion Code under the Coupon (Promotion codes → +), "
+                                "or paste the Coupon ID directly."
+                            )
+                        }
+                    )
+
+        if self.max_redemptions is not None and self.max_redemptions <= 0:
+            raise ValidationError({"max_redemptions": "Must be a positive integer."})
+
+    def is_redeemable(self) -> tuple[bool, str]:
+        if not self.active:
+            return False, "Coupon is inactive."
+
+        now = timezone.now()
+        if self.expires_at and now >= self.expires_at:
+            return False, "Coupon is expired."
+
+        if self.max_redemptions is not None and self.redeemed_count >= self.max_redemptions:
+            return False, "Coupon has reached its redemption limit."
+
+        if not (self.stripe_promotion_code_id or "").strip():
+            return False, "Coupon is misconfigured."
+
+        return True, ""
 
 
 class StripeCustomer(models.Model):

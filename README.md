@@ -64,6 +64,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - AI answers stored and streamed in dashboard (SSE)
 - Desktop paywall behavior: capture blocked while unpaired
 - Stripe monthly subscriptions (Checkout + webhooks + customer portal)
+- Coupon codes (admin-managed, backed by Stripe Promotion Codes or Coupon IDs)
 - Entitlement checks for AI answering when billing is enabled
 - Devices auto-revoke on `/devices/` when subscription is inactive
 - Desktop auto-unpairs if the backend revokes access (including periodic ~30s token re-validation)
@@ -80,7 +81,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 3 — Screenshot capture + OCR + question detection | Completed |
 | 4 — AI answering (streaming) | Completed |
 | 5 — Stripe subscriptions | Completed |
-| 6 — Coupons (admin CMS) | Planned |
+| 6 — Coupons (admin CMS) | Completed |
 | 7 — Render production hardening | Planned |
 
 See `PLAN.md` for detailed phased deliverables.
@@ -393,6 +394,33 @@ Stripe Dashboard → Settings → Billing → Customer portal:
 
 - Enable portal
 - Enable subscription cancellation and payment method updates (recommended)
+
+### Coupon codes
+
+Coupon codes are managed in Django Admin (`CouponCode`) and applied to Stripe Checkout.
+
+This app supports storing either:
+
+- a Stripe **Promotion Code ID** (commonly `promo_...`) or
+- a Stripe **Coupon ID** (commonly `coupon_...`)
+
+Depending on Stripe UI/version, you may also see shorter IDs. If you paste one of those, the backend will validate it against Stripe when `STRIPE_SECRET_KEY` is configured.
+
+#### Option A (recommended): Create a Promotion Code in Stripe (tutorial)
+
+Use this if you want a user-facing code (like `SAVE100`) with Stripe-managed rules.
+
+1. Stripe Dashboard (Test mode) → **Product catalog → Coupons**.
+2. Open your coupon (example: `SAVE100`).
+3. In the coupon page, scroll to **Promotion codes**.
+4. Click the **+** button to create a Promotion Code.
+5. Set the **Code** to what the user should type at checkout (example: `SAVE100`).
+6. Save, then copy the **Promotion Code ID**.
+7. In Django Admin → Billing → Coupon codes:
+   - `code`: the user-facing code (example: `SAVE100`)
+   - `stripe_promotion_code_id`: paste the Promotion Code ID
+
+Note: if you do not create a Promotion Code, the coupon will show “No promotion codes” and you’ll only have the Coupon ID.
 
 ### Device access policy tied to subscription
 

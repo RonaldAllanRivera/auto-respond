@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SaaS roadmap: Google login, Stripe subscriptions (monthly), coupon codes, and Render deployment (see `PLAN.md`).
 - Fresh Django SaaS-first scaffold with separate apps (`accounts`, `billing`, `devices`, `lessons`).
 - Docker Compose local development stack (Django + Postgres).
+- Admin-managed coupon codes (Stripe Promotion Codes or Coupon IDs) applied to Checkout sessions with redemption limits.
 - Phase 5 billing implementation:
   - Stripe SDK dependency (`stripe==7.13.0`).
   - Billing endpoints: `/billing/subscribe/`, `/billing/checkout/`, `/billing/portal/`, `/billing/webhook/`.

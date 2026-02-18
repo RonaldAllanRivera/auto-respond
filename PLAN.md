@@ -1,5 +1,27 @@
 # PLAN — Meet Lessons SaaS (Django + Desktop App → Screenshot OCR → AI Q&A)
 
+## Table of contents
+
+- [1) Goal](#1-goal)
+- [2) Security & configuration principles](#2-security--configuration-principles)
+- [3) SaaS architecture (high level)](#3-saas-architecture-high-level)
+- [4) Authentication model](#4-authentication-model)
+- [5) Stripe billing (monthly subscription)](#5-stripe-billing-monthly-subscription)
+- [6) Data model (multi-tenant)](#6-data-model-multi-tenant)
+- [7) Subscriber dashboard scope](#7-subscriber-dashboard-scope)
+- [8) Owner (admin) CMS scope](#8-owner-admin-cms-scope)
+- [9) Deployment to Render](#9-deployment-to-render)
+- [10) Phased implementation plan](#10-phased-implementation-plan)
+- [11) Testing](#11-testing)
+- [12) Non-goals (for MVP)](#12-non-goals-for-mvp)
+
+Related docs:
+
+- `README.md` — project overview + setup guides
+- `ENV.md` — environment variable contract
+- `TEST.md` — step-by-step verification checklists
+- `CHANGELOG.md` — historical record of changes
+
 ## 1) Goal
 Build a **single-repo SaaS** that:
 
@@ -105,17 +127,17 @@ Handle:
 Backend updates local subscription state used for entitlement checks.
 
 ### 5.4 Coupon codes
-Implement **coupon codes** with an admin-managed CMS.
+Coupon codes are admin-managed and backed by Stripe.
 
-Recommended approach:
+Best-practice approach:
 
 - Use Stripe **Coupons + Promotion Codes** as the billing source of truth.
-- Store a local `Coupon` model that maps:
-  - `code`
-  - `stripe_promotion_code_id`
+- Store a local `CouponCode` record that maps:
+  - `code` (what the user types)
+  - `stripe_promotion_code_id` (`promo_...`)
   - `active`, `max_redemptions`, `expires_at`
-- Admin can create/disable coupon codes in Django Admin.
-- At checkout creation time, backend applies the promotion code if valid.
+- Validate the code before creating the Checkout Session.
+- Increment redemption usage via webhook (idempotent) after successful checkout.
 
 ### 5.5 Pricing CMS (Admin)
 
@@ -148,8 +170,8 @@ Recommended approach:
 - `QuestionAnswer`
   - lesson FK nullable
   - question, answer, model, latency_ms
-- `Coupon`
-  - code, stripe promotion code id, active flags
+- `CouponCode`
+  - code, stripe promotion code id, active, expiry, max redemptions, redeemed count
 
 ## 7) Subscriber dashboard scope
 
@@ -228,10 +250,10 @@ Use Django Admin as the primary CMS:
 - Billing subscribe page UX emphasizes importance with pricing clarity, trust signals, and next steps ✓
 - Billing portal session flow ✓
 
-### Phase 6 — Coupons (admin CMS)
-- `Coupon` model + Django Admin
-- Apply coupon code in checkout flow
-- Validation rules (active, expiry, redemption limits)
+### Phase 6 — Coupons (admin CMS) (Completed)
+- `CouponCode` model + Django Admin (maps local code → Stripe Promotion Code ID or Coupon ID) ✓
+- Coupon code field on `/billing/subscribe/` applied during Stripe Checkout Session creation ✓
+- Validation rules: active flag, expiry timestamp, max redemptions (tracked via webhook) ✓
 
 ### Phase 7 — Render production hardening
 - Proper `ALLOWED_HOSTS`, HTTPS settings
@@ -250,306 +272,13 @@ Use Django Admin as the primary CMS:
 - Keep Django as API/admin service while Next.js handles subscriber UI.
 - Preserve current API contract and parity for lessons, transcripts, Q&A streaming, settings, devices, and billing views.
 
-## 11) Testing (Phase 2-5)
+## 11) Testing
 
-### 11.1 Prerequisites
+This document intentionally stays high-level.
 
-**System dependencies:**
+For step-by-step verification (device pairing, OCR capture, AI answering, Stripe subscriptions, coupon codes, and revocation behavior), use:
 
-```bash
-# Ubuntu/Debian
-sudo apt install tesseract-ocr xclip
-
-# macOS
-brew install tesseract
-```
-
-Verify Tesseract is installed:
-
-```bash
-tesseract --version
-```
-
-**Backend running:**
-
-```bash
-docker compose up --build
-```
-
-Create a superuser if you don't have one:
-
-```bash
-docker compose run --rm web python manage.py createsuperuser
-```
-
-**Desktop app dependencies:**
-
-```bash
-cd desktop
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
-
-Desktop app environment:
-
-```bash
-cp desktop/.env.example desktop/.env
-# local dev
-# MEET_LESSONS_URL=http://localhost:8000
-```
-
-### 11.2 Phase 2 — Device pairing
-
-**Test: Pair the desktop app with your account**
-
-1. Start the desktop app:
-   ```bash
-   cd desktop
-   .venv/bin/python main.py
-   ```
-2. Ensure `desktop/.env` has `MEET_LESSONS_URL=http://localhost:8000`.
-3. Log in to the dashboard at `http://localhost:8000/` (Google OAuth or superuser).
-4. Go to **Devices** (`http://localhost:8000/devices/`).
-5. Click **Generate pairing code** — note the 8-character code (e.g. `5074D63A`).
-6. In the desktop app, enter the code in the **Pairing code** field.
-7. Click **Pair Device**.
-
-Expected:
-- Activity log shows: `Pairing with code 5074D63A...` then `Paired successfully! Device ID: xxxxxxxx...`
-- Status changes to: `✓ Paired (device xxxxxxxx...)`
-- Pairing code entry and Pair button become disabled.
-- On the dashboard `/devices/` page, a new device appears (label: "Desktop App").
-
-**Test: Unpair the desktop app**
-
-1. Click **Unpair** in the desktop app.
-2. Expected:
-   - Activity log shows: `Device unpaired.`
-   - Status changes to: `Not paired — enter a pairing code from the dashboard`
-   - Pairing code entry and Pair button become enabled again.
-
-**Test: Pairing error cases**
-
-| Action | Expected |
-|---|---|
-| Click "Pair Device" with empty code | Warning dialog: "Enter a pairing code first." |
-| Enter an expired code (wait >10 min) | Activity log: `Pairing failed: ...` + error dialog |
-| Enter a wrong/random code | Activity log: `Pairing failed: ...` + error dialog |
-| Enter code while backend is down | Activity log: `Pairing failed: ...` (network error) |
-
-### 11.3 Phase 3 — Screenshot capture + OCR + question detection
-
-**Prerequisite:** Desktop app must be paired (complete Phase 2 test first).
-
-**Test: Capture a screenshot with Print Screen**
-
-1. Open **Google Meet** (or any page with text) and enable **CC/subtitles**.
-2. Press **Print Screen** on your keyboard.
-3. Switch to the desktop app window.
-
-Expected activity log output (in order):
-```
-Screenshot captured — running OCR...
-OCR done (XXXms): [first 100 chars of extracted text]...
-Caption sent → lesson 1, chunk 1, new=True
-Found N question(s): [first question]...
-Question sent → ID 1: [question text]
-```
-
-**Test: Manual capture button**
-
-1. Take a screenshot first (Print Screen) so the clipboard has an image.
-2. Click **Capture Now (Manual)** in the desktop app.
-3. Expected: same activity log output as above.
-
-**Test: Capture with no image in clipboard**
-
-1. Copy some text (not an image) to the clipboard.
-2. Click **Capture Now (Manual)**.
-3. Expected: `No image in clipboard — capturing screen` then proceeds with full-screen capture.
-
-**Test: Capture while not paired**
-
-1. Click **Unpair** first.
-2. Press Print Screen or click **Capture Now**.
-3. Expected:
-   ```
-   Not paired — pair your device first to enable capture
-   ```
-   - Manual capture button stays disabled while unpaired.
-
-**Test: OCR quality check**
-
-1. Open a page with clear, large text (e.g. Google Meet captions with CC enabled).
-2. Press Print Screen.
-3. Check the activity log — the OCR text should be readable and match the screen content.
-4. If OCR returns no text: ensure Tesseract is installed and the screenshot contains actual text.
-
-**Test: Question detection**
-
-The detector recognizes two categories of questions:
-
-| Input text | Detected as |
-|---|---|
-| `What is photosynthesis?` | WH-start question |
-| `How do plants make food` | WH-start question (adds `?`) |
-| `1/4 x 1/5` | Fraction math expression → `What is 1/4 x 1/5?` |
-| `5 + 3` | Math expression → `What is 5 + 3?` |
-| `docs.google.com/.../edit?` | Ignored (URL noise) |
-| `The sky is blue.` | Not detected (no question) |
-
-To test without screenshots, use curl directly:
-
-```bash
-# Send a caption with a question in it
-curl -X POST http://localhost:8000/api/captions/ \
-  -H "Content-Type: application/json" \
-  -H "X-Device-Token: YOUR_TOKEN" \
-  -d '{"meeting_title": "Test Class", "speaker": "", "text": "What is the capital of France?"}'
-
-# Send a question for AI answering
-curl -X POST http://localhost:8000/api/questions/ \
-  -H "Content-Type: application/json" \
-  -H "X-Device-Token: YOUR_TOKEN" \
-  -d '{"question": "What is the capital of France?", "context": "The teacher was discussing European geography.", "meeting_title": "Test Class"}'
-```
-
-**Test: Server-side dedupe**
-
-1. Press Print Screen on the same screen twice (same text).
-2. Expected:
-   - First capture: `Caption sent → lesson X, chunk Y, new=True`
-   - Second capture: `Caption sent → lesson X, chunk Z, new=False`
-
-### 11.4 Phase 4 — AI answering + streaming dashboard
-
-**Prerequisite:** `OPENAI_API_KEY` must be set in `.env` and Docker restarted.
-
-**Test: AI answers via desktop app capture**
-
-1. Open Google Meet with CC enabled (or any page with a question visible).
-2. Press Print Screen to capture a question.
-3. Activity log should show: `Question sent → ID X: [question]`
-4. Open the dashboard → click the lesson → scroll to **Questions & Answers**.
-5. Expected: the question appears with an AI-generated answer.
-
-**Test: Streaming AI answers on dashboard**
-
-1. Submit a question (via desktop app or curl).
-2. Open the lesson detail page on the dashboard.
-3. Expected: the answer streams in token-by-token via SSE (visible as text appearing progressively).
-4. After streaming completes, the full answer is displayed.
-
-**Test: AI answer via curl**
-
-```bash
-curl -X POST http://localhost:8000/api/questions/ \
-  -H "Content-Type: application/json" \
-  -H "X-Device-Token: YOUR_TOKEN" \
-  -d '{
-    "question": "What is photosynthesis?",
-    "context": "The teacher explained how plants convert sunlight into energy.",
-    "meeting_title": "Biology Class"
-  }'
-```
-
-Expected response:
-```json
-{
-  "question_id": 1,
-  "lesson_id": 1,
-  "answer": "Photosynthesis is the process...",
-  "model": "gpt-4o-mini",
-  "latency_ms": 2500
-}
-```
-
-**Test: SSE streaming endpoint**
-
-Open in browser (must be logged in to the dashboard):
-
-```
-http://localhost:8000/api/questions/1/stream/
-```
-
-Expected: SSE events with `{"token": "...", "done": false}` followed by `{"done": true}`.
-
-**Test: Dashboard auto-refresh**
-
-1. Open a lesson detail page on the dashboard.
-2. From the desktop app, capture a new screenshot with a question.
-3. Expected: the new Q&A appears on the dashboard within a few seconds (auto-refresh).
-
-### 11.5 End-to-end test (full flow)
-
-Run through the complete flow in one session:
-
-1. `docker compose up --build` — start backend
-2. `cd desktop && .venv/bin/python main.py` — start desktop app
-3. Pair the desktop app (generate code on `/devices/`, enter in app)
-4. Open Google Meet → enable CC → join or start a meeting
-5. Wait for the teacher/speaker to ask a question
-6. Press **Print Screen**
-7. Check desktop app activity log — should show OCR text, caption sent, question detected and sent
-8. Open dashboard → click the lesson → see the question with a streaming AI answer
-9. Verify answer appears within ~5 seconds of the capture
-
-### 11.6 Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `ModuleNotFoundError: No module named 'pytesseract'` | Run `pip install -r requirements.txt` in `desktop/` |
-| `tesseract is not installed or not in PATH` | Install Tesseract: `sudo apt install tesseract-ocr` |
-| OCR returns empty text | Ensure the screenshot has readable text; try larger font/zoom |
-| `ConnectionError` when sending captions | Ensure backend is running: `docker compose up` |
-| "Not paired" after restart | Config is stored in `~/.meet_lessons/config.json` — re-pair if needed |
-| Print Screen not detected | On some Linux DEs, Print Screen is intercepted by the screenshot tool. Try running with `sudo` or disable the system screenshot shortcut |
-| `tkinter` not found | Install: `sudo apt install python3-tk` |
-| No AI answer returned | Ensure `OPENAI_API_KEY` is set in `.env` and Docker is restarted |
-
-### 11.7 Phase 5 — Stripe subscriptions + webhook sync
-
-**Prerequisites:**
-
-- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` set in root `.env`
-- Billing Plan configured in Django Admin with valid `stripe_monthly_price_id`
-- Webhook forwarder running locally (Stripe CLI)
-
-Start local webhook forwarding (Docker Stripe CLI):
-
-```bash
-docker run --rm -it --network=host \
-  -v "$HOME/.config/stripe:/root/.config/stripe" \
-  stripe/stripe-cli:latest listen --forward-to http://localhost:8000/billing/webhook/
-```
-
-**Test: Checkout flow**
-
-1. Log in to `http://localhost:8000/`
-2. Open `http://localhost:8000/billing/subscribe/`
-3. Click **Subscribe monthly** and complete Stripe Checkout in test mode
-4. Expected:
-   - Redirect to `/billing/success/`
-   - Webhook delivery visible in Stripe CLI output
-   - `StripeCustomer`, `StripeSubscription`, and `StripeEvent` records update in Django Admin
-
-**Test: Entitlement enforcement**
-
-1. Use a user without active subscription
-2. Call `POST /api/questions/`
-3. Expected: `403` with `{"error": "Subscription required"}`
-4. Activate subscription and retry
-5. Expected: AI answer flow succeeds
-
-**Test: Device auto-revocation on inactive subscription**
-
-1. Pair at least one desktop device while subscription is active
-2. Move subscription to inactive/ended state in Stripe Test mode
-3. Visit `/devices/`
-4. Expected:
-   - active devices are auto-revoked
-   - pairing code generation is disabled
-   - API pairing exchange returns `403` (`{"error": "Subscription required"}`)
+- `TEST.md`
 
 ## 12) Non-goals (for MVP)
 

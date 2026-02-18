@@ -212,6 +212,23 @@ docker run --rm -it --network=host \
   stripe/stripe-cli:latest trigger invoice.payment_failed
 ```
 
+### 11f) Coupon codes
+
+1. In Stripe Dashboard (Test mode), create:
+   - a Coupon (percentage or amount)
+   - a Promotion Code for that coupon (copy the Promotion Code ID: `promo_...`)
+   - If you do not want to create a Promotion Code, you can also use the Stripe Coupon ID directly.
+2. In Django Admin, create a `CouponCode` row:
+   - `code`: the text users will type (e.g. `SAVE20`)
+   - `stripe_promotion_code_id`: the Stripe Promotion Code ID (`promo_...`) or Coupon ID
+   - optional: `expires_at`, `max_redemptions`
+3. Open `/billing/subscribe/`, enter the coupon code, click **Subscribe now**.
+
+Expected:
+- Invalid/expired/over-limit coupons show an inline error on the subscribe page.
+- Valid coupon redirects to Stripe checkout and shows the discount applied.
+- After successful payment, the coupon `redeemed_count` increments (webhook-driven).
+
 ### 11d) Entitlement checks
 
 When billing is configured and user has no active subscription:
@@ -238,8 +255,6 @@ When subscription becomes active again:
 
 - User can generate a new pairing code and re-pair desktop device(s)
 
-## What's next (Phase 6)
+## What's next (Phase 7)
 
-- Coupons:
-  - Coupon model + admin workflows
-  - Coupon application in Checkout
+- Render production hardening

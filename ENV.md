@@ -93,6 +93,7 @@ Pricing notes:
 
 - This project uses a **flat monthly subscription of $15.00 USD**.
 - The Stripe **Price ID** for that plan is configured via the Django Admin Billing Plan CMS (stored in the database), not via environment variables.
+- Coupon codes are also configured via Django Admin (`CouponCode`) and map to a Stripe Promotion Code ID or Coupon ID (Stripe may display shorter IDs depending on UI/version).
 - Device policy when billing is configured: users without an active subscription cannot pair devices, and active devices are auto-revoked on `/devices/`.
 
 Security notes:
