@@ -255,6 +255,50 @@ When subscription becomes active again:
 
 - User can generate a new pairing code and re-pair desktop device(s)
 
-## What's next (Phase 7)
+## Phase 7 — Render production hardening (verification)
 
-- Render production hardening
+### 7a) Local: confirm DEBUG=0 startup guard
+
+Run with `DEBUG=0` and no `DJANGO_SECRET_KEY` set:
+
+```bash
+docker compose run --rm -e DJANGO_DEBUG=0 web python -c "import meet_lessons.settings"
+```
+
+Expected: `RuntimeError: DJANGO_SECRET_KEY must be set to a strong random value in production.`
+
+### 7b) Local: confirm HTTPS settings are inactive in dev
+
+With `DJANGO_DEBUG=1` (default), the following must NOT be set:
+
+- `SECURE_SSL_REDIRECT` — would redirect all local HTTP to HTTPS and break dev
+- `SESSION_COOKIE_SECURE` / `CSRF_COOKIE_SECURE` — would break cookie auth over HTTP
+
+Verify by checking that the local dev stack (`docker compose up`) works normally with no HTTPS.
+
+### 7c) Production (Render): CSRF_TRUSTED_ORIGINS
+
+Set in Render environment:
+
+```
+DJANGO_CSRF_TRUSTED_ORIGINS=https://<your-service>.onrender.com
+```
+
+Expected: POST forms (subscribe, checkout, devices, settings) work without CSRF errors.
+
+### 7d) Production (Render): HTTPS redirect
+
+With `DJANGO_DEBUG=0` and `SECURE_SSL_REDIRECT=True`, any HTTP request should redirect to HTTPS automatically (Render handles TLS termination and sets `X-Forwarded-Proto: https`).
+
+### 7e) Production: structured logging
+
+Render log viewer should show structured lines like:
+
+```
+INFO 2026-02-18 10:00:00,000 views Caption received for user 1
+WARNING 2026-02-18 10:00:01,000 billing Stripe key not configured
+```
+
+## What's next (Phase 8)
+
+- Dashboard realtime UX: latest Q&A panel on home, SSE/polling updates

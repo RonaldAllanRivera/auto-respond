@@ -24,6 +24,12 @@ Recommended for local dev:
 - `DJANGO_DEBUG=1`
 - `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1`
 
+Required in production (Render):
+
+- `DJANGO_CSRF_TRUSTED_ORIGINS=https://<your-service>.onrender.com`
+  - Comma-separated list of trusted origins for CSRF (required for POST forms over HTTPS).
+  - Example: `https://meetlessons.onrender.com`
+
 Recommended for device pairing:
 
 - `DEVICE_TOKEN_SECRET`

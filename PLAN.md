@@ -255,11 +255,15 @@ Use Django Admin as the primary CMS:
 - Coupon code field on `/billing/subscribe/` applied during Stripe Checkout Session creation ✓
 - Validation rules: active flag, expiry timestamp, max redemptions (tracked via webhook) ✓
 
-### Phase 7 — Render production hardening
-- Proper `ALLOWED_HOSTS`, HTTPS settings
-- Static files strategy
-- DB migrations on deploy
-- Admin hardening and logging
+### Phase 7 — Render production hardening (Completed)
+- Proper `ALLOWED_HOSTS` from env var ✓
+- HTTPS security headers: `SECURE_PROXY_SSL_HEADER`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, HSTS ✓
+- `CSRF_TRUSTED_ORIGINS` from env var (required for Render HTTPS POST forms) ✓
+- `SECRET_KEY` startup guard: raises `RuntimeError` if default key used in production ✓
+- Static files via WhiteNoise + `collectstatic` at container start ✓
+- DB migrations run at container start (`migrate --noinput`) ✓
+- Structured console logging (`LOGGING` config) ✓
+- Gunicorn (production WSGI server) in Dockerfile CMD ✓
 
 ### Phase 8 — Dashboard realtime UX (Django templates, pre-Next.js)
 - Add "Latest Q&A" panel on `/` (dashboard home) so students can see newest Q&A immediately.

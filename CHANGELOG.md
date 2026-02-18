@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fresh Django SaaS-first scaffold with separate apps (`accounts`, `billing`, `devices`, `lessons`).
 - Docker Compose local development stack (Django + Postgres).
 - Admin-managed coupon codes (Stripe Promotion Codes or Coupon IDs) applied to Checkout sessions with redemption limits.
+- Phase 7 production hardening:
+  - HTTPS security headers: `SECURE_PROXY_SSL_HEADER`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, HSTS (1 year, include subdomains, preload).
+  - `CSRF_TRUSTED_ORIGINS` from `DJANGO_CSRF_TRUSTED_ORIGINS` env var (required for Render HTTPS POST forms).
+  - `SECRET_KEY` startup guard: raises `RuntimeError` if the default dev key is used with `DEBUG=0`.
+  - Structured console logging (`LOGGING` config) with verbose formatter for Render log viewer.
+  - All security settings are gated on `DEBUG=False` so local dev is unaffected.
 - Phase 5 billing implementation:
   - Stripe SDK dependency (`stripe==7.13.0`).
   - Billing endpoints: `/billing/subscribe/`, `/billing/checkout/`, `/billing/portal/`, `/billing/webhook/`.

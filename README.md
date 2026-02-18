@@ -82,7 +82,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 4 — AI answering (streaming) | Completed |
 | 5 — Stripe subscriptions | Completed |
 | 6 — Coupons (admin CMS) | Completed |
-| 7 — Render production hardening | Planned |
+| 7 — Render production hardening | Completed |
 
 See `PLAN.md` for detailed phased deliverables.
 
@@ -479,7 +479,7 @@ File: `desktop/main.py`
 
 ## What’s next
 
-- Coupon management in Admin
-- Render production hardening
+- Phase 8: Dashboard realtime UX (latest Q&A panel, SSE/polling on home)
+- Phase 9: Frontend migration to Next.js (post-core)
 
 See `PLAN.md` and `CHANGELOG.md` for ongoing milestones.
