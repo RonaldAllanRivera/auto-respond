@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import parse_qsl, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -78,6 +79,28 @@ DATABASES = {
         "PORT": int(os.environ.get("POSTGRES_PORT", "5432")),
     }
 }
+
+_database_url = os.environ.get("DATABASE_URL", "").strip()
+if _database_url:
+    parsed = urlparse(_database_url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        raise RuntimeError(f"Unsupported DATABASE_URL scheme: {parsed.scheme!r}")
+
+    db_name = (parsed.path or "").lstrip("/")
+    query = dict(parse_qsl(parsed.query))
+
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": db_name,
+        "USER": parsed.username or "",
+        "PASSWORD": parsed.password or "",
+        "HOST": parsed.hostname or "",
+        "PORT": int(parsed.port or 5432),
+    }
+
+    sslmode = query.get("sslmode")
+    if sslmode:
+        DATABASES["default"].setdefault("OPTIONS", {})["sslmode"] = sslmode
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
