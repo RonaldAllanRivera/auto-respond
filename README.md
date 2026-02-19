@@ -16,6 +16,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - [API contract (desktop ↔ backend)](#api-contract-desktop--backend)
 - [Quickstart (local)](#quickstart-local)
 - [Stripe subscriptions (setup guide)](#stripe-subscriptions-setup-guide)
+- [Deploy to Render (production)](#deploy-to-render-production)
 - [Validation summary (verified)](#validation-summary-verified)
 - [Troubleshooting](#troubleshooting)
 - [What’s next](#whats-next)
@@ -446,6 +447,150 @@ Best-practice user flow:
 3. Checkout creates subscription
 4. Webhook syncs subscription state
 5. AI answering endpoints enforce entitlement when billing is configured
+
+---
+
+## Deploy to Render (production)
+
+This project is designed to deploy on [Render](https://render.com) as a **Web Service** (Docker) + **PostgreSQL** managed database.
+
+### Prerequisites
+
+- GitHub repo pushed to `main`
+- Render account (free tier works for testing)
+- Stripe account (Test mode keys)
+- Google OAuth credentials (for production domain)
+- OpenAI API key
+
+---
+
+### Step 1 — Create a PostgreSQL database on Render
+
+1. Render Dashboard → **New** → **PostgreSQL**
+2. Name it `meet-lessons-db`
+3. Choose the free plan
+4. Click **Create Database**
+5. Once created, copy the **Internal Database URL** (used in Step 3)
+
+---
+
+### Step 2 — Create a Web Service on Render
+
+1. Render Dashboard → **New** → **Web Service**
+2. Connect your GitHub repo (`auto-respond`)
+3. Settings:
+   - **Branch:** `main`
+   - **Runtime:** `Docker`
+   - **Dockerfile path:** `./Dockerfile` (auto-detected)
+   - **Region:** choose closest to your users
+4. Click **Create Web Service** (don't deploy yet — set env vars first)
+
+---
+
+### Step 3 — Set environment variables on Render
+
+In your Web Service → **Environment** tab, add all of the following:
+
+| Variable | Value |
+|---|---|
+| `DJANGO_SECRET_KEY` | Generate a strong random key (50+ chars) |
+| `DJANGO_DEBUG` | `0` |
+| `DJANGO_ALLOWED_HOSTS` | `your-app.onrender.com` |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | `https://your-app.onrender.com` |
+| `DATABASE_URL` | Paste the **Internal Database URL** from Step 1 |
+| `DEVICE_TOKEN_SECRET` | Generate a strong random key |
+| `OPENAI_API_KEY` | `sk-...` |
+| `OPENAI_MODEL` | `gpt-4o-mini` |
+| `OPENAI_TIMEOUT_SECONDS` | `15` |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
+| `STRIPE_SECRET_KEY` | `sk_test_...` (Test mode) |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_...` (from Render webhook endpoint — see Step 5) |
+| `DEFAULT_GRADE_LEVEL` | `3` |
+| `DEFAULT_MAX_SENTENCES` | `2` |
+| `DESKTOP_DOWNLOAD_URL` | `https://github.com/RonaldAllanRivera/auto-respond/releases/download/v1.0.6/MeetLessonsInstaller.exe` |
+
+> **Generate a secret key (Linux/macOS):**
+> ```bash
+> python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+> ```
+
+---
+
+### Step 4 — Configure Google OAuth for production
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → your OAuth app → **Credentials**
+2. Under **Authorized redirect URIs**, add:
+   ```
+   https://your-app.onrender.com/accounts/google/login/callback/
+   ```
+3. Save
+4. In Django Admin (after first deploy): **Sites** → change `example.com` to `your-app.onrender.com`
+5. **Social Applications** → update the Google app's `Client ID` and `Secret Key` to match production credentials
+
+---
+
+### Step 5 — Configure Stripe webhook for production
+
+1. Stripe Dashboard → **Developers** → **Webhooks** → **Add endpoint**
+2. Endpoint URL:
+   ```
+   https://your-app.onrender.com/billing/webhook/
+   ```
+3. Subscribe to events:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.paid`
+   - `invoice.payment_failed`
+4. Copy the **Signing secret** (`whsec_...`) → set as `STRIPE_WEBHOOK_SECRET` in Render env
+
+---
+
+### Step 6 — Deploy
+
+1. Render → your Web Service → **Manual Deploy** → **Deploy latest commit**
+2. Watch the build logs — the container runs:
+   - `python manage.py migrate --noinput`
+   - `python manage.py collectstatic --noinput`
+   - Gunicorn starts on port 8000
+3. Once green, visit `https://your-app.onrender.com/`
+
+---
+
+### Step 7 — Post-deploy setup
+
+1. Create a superuser via Render **Shell** tab:
+   ```bash
+   python manage.py createsuperuser
+   ```
+2. Django Admin → **Sites** → set domain to `your-app.onrender.com`
+3. Django Admin → **Social Applications** → update Google OAuth credentials
+4. Django Admin → **Billing → Billing plans** → set `stripe_monthly_price_id` to your `price_...`
+5. Django Admin → **Stripe Customer Portal** → enable in Stripe Dashboard (Settings → Billing → Customer portal)
+
+---
+
+### Step 8 — Smoke test
+
+- [ ] Visit `https://your-app.onrender.com/` — redirects to login
+- [ ] Google login works
+- [ ] `/devices/` shows **Download for Windows** button linking to the GitHub Release
+- [ ] Pair a device using the desktop app (`MeetLessonsInstaller.exe`)
+- [ ] Subscribe via `/billing/subscribe/` (Stripe test card `4242 4242 4242 4242`)
+- [ ] Capture a question → answer streams in dashboard
+- [ ] Cancel subscription → device auto-revokes on `/devices/`
+
+---
+
+### Updating the desktop download URL (future releases)
+
+When you publish a new installer version:
+1. Push a new tag: `git tag v1.x.x && git push origin v1.x.x`
+2. GitHub Actions builds and publishes `MeetLessonsInstaller.exe` automatically
+3. Update `DESKTOP_DOWNLOAD_URL` on Render to the new release URL
+4. Redeploy (or Render auto-deploys on push)
 
 ---
 
