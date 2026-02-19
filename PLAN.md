@@ -265,18 +265,28 @@ Use Django Admin as the primary CMS:
 - Structured console logging (`LOGGING` config) ✓
 - Gunicorn (production WSGI server) in Dockerfile CMD ✓
 
+### Deploy checkpoint — Render production deploy (do before Phase 8)
+- Push all completed phases to `main` and trigger a Render redeploy.
+- Set `DESKTOP_DOWNLOAD_URL` on Render environment (same GitHub Releases URL as local `.env`).
+- Verify `/devices/` shows the **Download for Windows** button in production.
+- Verify Stripe webhooks, Google login, and device pairing work end-to-end on Render.
+- Smoke-test the full student flow: login → subscribe → pair device → capture → see answer on dashboard.
+
 ### Phase 8 — Dashboard realtime UX (Django templates, pre-Next.js)
-- Add "Latest Q&A" panel on `/` (dashboard home) so students can see newest Q&A immediately.
-- Add lightweight API endpoint (session-auth) for latest Q&A feed per user.
-- Add JavaScript polling/SSE on dashboard home to update latest Q&A without manual refresh.
-- Ensure first detected question/answer appears at once on the page.
+- Add **"Latest Q&A" panel** on `/` (dashboard home) — shows the most recent question + AI answer for the logged-in user.
+- Add a lightweight **session-auth JSON endpoint** (`GET /api/lessons/latest/`) returning the latest N Q&A pairs.
+- Use **JavaScript polling** (every 3–5 s) on the dashboard home to refresh the panel without a page reload.
+  - Polling is simpler and more reliable than SSE for this use case (SSE already used for the answer stream itself).
+  - Stop polling when the tab is hidden (`document.visibilityState`), resume on focus.
+- Show a **loading spinner** on first load and a **"No questions yet"** empty state.
+- Ensure the first detected question/answer appears immediately without waiting for the next poll cycle (push on question creation via the existing SSE stream or trigger a poll immediately after answer completes).
 
 ### Phase 9 — Frontend migration to Next.js (post-core completion)
 - Migrate user-facing pages to Next.js after core backend/deployment phases are stable.
 - Keep Django as API/admin service while Next.js handles subscriber UI.
 - Preserve current API contract and parity for lessons, transcripts, Q&A streaming, settings, devices, and billing views.
 
-### Phase 10 — Windows desktop installer ✓
+### Phase 10 — Windows desktop installer (Completed)
 - Bundle Python desktop app into a single `.exe` using **PyInstaller** (Windows build step). ✓
 - Package into a one-click **Inno Setup** installer that: ✓
   - Silently installs Tesseract OCR (bundled Tesseract `setup.exe` run with `/S`). ✓
