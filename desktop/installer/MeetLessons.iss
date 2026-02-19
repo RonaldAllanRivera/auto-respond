@@ -49,7 +49,7 @@ Name: "{commondesktop}\Meet Lessons"; Filename: "{app}\MeetLessons.exe"; Tasks: 
 
 [Run]
 ; Install Tesseract silently (/S = silent, /D sets install dir to default)
-Filename: "{tmp}\{#TESSERACT_INSTALLER}"; Parameters: "/S"; StatusMsg: "Installing Tesseract OCR (required for screenshot capture)..."; Flags: waitprogress
+Filename: "{tmp}\{#TESSERACT_INSTALLER}"; Parameters: "/S"; StatusMsg: "Installing Tesseract OCR (required for screenshot capture)..."; Flags: waituntilterminated
 
 ; Optionally launch the app after install
 Filename: "{app}\MeetLessons.exe"; Description: "Launch Meet Lessons now"; Flags: nowait postinstall skipifsilent
