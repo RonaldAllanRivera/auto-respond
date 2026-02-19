@@ -276,18 +276,18 @@ Use Django Admin as the primary CMS:
 - Keep Django as API/admin service while Next.js handles subscriber UI.
 - Preserve current API contract and parity for lessons, transcripts, Q&A streaming, settings, devices, and billing views.
 
-### Phase 10 — Windows desktop installer
-- Bundle Python desktop app into a single `.exe` using **PyInstaller** (Windows build step).
-- Package into a one-click **Inno Setup** installer that:
-  - Silently installs Tesseract OCR (bundled Tesseract `setup.exe` run with `/S`).
-  - Installs app to `C:\Program Files\MeetLessons\`.
-  - Creates Start Menu shortcut and desktop shortcut.
-  - Registers a clean uninstaller (visible in Windows "Add or Remove Programs").
-- Add a custom `.ico` app icon (multi-size: 256×256, 48×48, 32×32, 16×16).
-- Host the final `MeetLessonsInstaller.exe` as a **GitHub Release** asset.
-- Add a **Download Desktop App** button/link on the Django user dashboard (`/download/`) that links to the latest GitHub Release.
-- Document the full build process in `desktop/BUILD.md`.
-- See `desktop/BUILD.md` for step-by-step PyInstaller + Inno Setup instructions.
+### Phase 10 — Windows desktop installer ✓
+- Bundle Python desktop app into a single `.exe` using **PyInstaller** (Windows build step). ✓
+- Package into a one-click **Inno Setup** installer that: ✓
+  - Silently installs Tesseract OCR (bundled Tesseract `setup.exe` run with `/S`). ✓
+  - Installs app to `C:\Program Files\MeetLessons\`. ✓
+  - Creates Start Menu shortcut and desktop shortcut. ✓
+  - Registers a clean uninstaller (visible in Windows "Add or Remove Programs"). ✓
+- Add a custom `.ico` app icon (multi-size: 256×256, 48×48, 32×32, 16×16). ✓
+- Host the final `MeetLessonsInstaller.exe` as a **GitHub Release** asset. ✓
+- Add a **Download Desktop App** button/link on the Django `/devices/` page via `DESKTOP_DOWNLOAD_URL` env var. ✓
+- Document the full build process in `desktop/BUILD.md`. ✓
+- GitHub Actions workflow (`.github/workflows/build-desktop.yml`) auto-builds + publishes installer on `v*` tag push. ✓
 
 ## 11) Testing
 

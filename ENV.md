@@ -112,7 +112,8 @@ Security notes:
 - `DESKTOP_DOWNLOAD_URL`
   - Optional. When set, a **Download for Windows** button appears on the `/devices/` page.
   - Set to the GitHub Release direct download URL after publishing the installer.
-  - Example: `https://github.com/<your-org>/<repo>/releases/download/v1.0.0/MeetLessonsInstaller.exe`
+  - Current live value: `https://github.com/RonaldAllanRivera/auto-respond/releases/download/v1.0.6/MeetLessonsInstaller.exe`
+  - New releases are built automatically by GitHub Actions on every `v*` tag push (see `.github/workflows/build-desktop.yml`).
   - See `desktop/BUILD.md` for the full build + publish workflow.
 
 ## Device pairing

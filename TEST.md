@@ -299,31 +299,35 @@ INFO 2026-02-18 10:00:00,000 views Caption received for user 1
 WARNING 2026-02-18 10:00:01,000 billing Stripe key not configured
 ```
 
-## Phase 10 — Windows desktop installer (verification)
+## Phase 10 — Windows desktop installer (verification) ✓
 
-### 10a) Download button visibility
+### 10a) Download button visibility ✓
 
 - With `DESKTOP_DOWNLOAD_URL` **not set** (empty): the Download banner must **not** appear on `/devices/`.
-- With `DESKTOP_DOWNLOAD_URL=https://example.com/MeetLessonsInstaller.exe` set: the **Download for Windows** button must appear on `/devices/` and link to the correct URL.
+- With `DESKTOP_DOWNLOAD_URL` set: the **Download for Windows** button must appear on `/devices/` and link to the correct URL.
+- **Live URL (v1.0.6):** `https://github.com/RonaldAllanRivera/auto-respond/releases/download/v1.0.6/MeetLessonsInstaller.exe`
 
-### 10b) Build verification (Windows machine)
+### 10b) GitHub Actions CI build ✓
 
-Follow `desktop/BUILD.md` steps:
+- Push a `v*` tag → GitHub Actions spins up a Windows VM, downloads Tesseract dynamically, builds `MeetLessons.exe` with PyInstaller, compiles `MeetLessonsInstaller.exe` with Inno Setup 6, and publishes a GitHub Release automatically.
+- First successful build: **`v1.0.6`** (all steps green).
 
-1. Run PyInstaller — confirm `dist/MeetLessons.exe` is produced.
-2. Double-click `dist/MeetLessons.exe` — tkinter window must open without a console.
-3. Run Inno Setup — confirm `dist/MeetLessonsInstaller.exe` is produced.
-4. On a **clean Windows VM** (no Python, no Tesseract):
-   - Run `MeetLessonsInstaller.exe` — Tesseract installs silently, app installs to `C:\Program Files\MeetLessons\`.
-   - Start Menu shortcut opens the app.
-   - Desktop shortcut opens the app (if selected during install).
-   - Uninstall via Settings → Apps → Meet Lessons — app and shortcuts are removed cleanly.
+### 10c) Install verification (pending — clean Windows VM)
 
-### 10c) GitHub Release
+On a **clean Windows VM** (no Python, no Tesseract):
+- Run `MeetLessonsInstaller.exe` — Tesseract installs silently, app installs to `C:\Program Files\MeetLessons\`.
+- Start Menu shortcut opens the app.
+- Desktop shortcut opens the app (if selected during install).
+- App connects to `https://meetlessons.onrender.com` automatically (no `.env` needed).
+- Uninstall via Settings → Apps → Meet Lessons — app and shortcuts are removed cleanly.
 
-- Upload `MeetLessonsInstaller.exe` to a GitHub Release.
-- Copy the direct download URL and set `DESKTOP_DOWNLOAD_URL` on Render.
-- Reload `/devices/` — button must link to the GitHub Release URL.
+### 10d) Shipping a new version
+
+```bash
+git tag v1.x.x
+git push origin v1.x.x
+```
+GitHub Actions builds and publishes automatically. Update `DESKTOP_DOWNLOAD_URL` on Render to the new release URL.
 
 ## What's next (Phase 8)
 

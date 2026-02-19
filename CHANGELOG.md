@@ -12,12 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fresh Django SaaS-first scaffold with separate apps (`accounts`, `billing`, `devices`, `lessons`).
 - Docker Compose local development stack (Django + Postgres).
 - Admin-managed coupon codes (Stripe Promotion Codes or Coupon IDs) applied to Checkout sessions with redemption limits.
-- Phase 10 Windows desktop installer (planned):
+- Phase 10 Windows desktop installer (completed):
   - PyInstaller + Inno Setup one-click installer for Windows 11.
-  - Bundles Tesseract OCR silently (no user action required).
-  - GitHub Releases as distribution channel.
+  - Bundles Tesseract OCR silently — downloaded dynamically from UB-Mannheim latest release.
+  - GitHub Actions workflow (`.github/workflows/build-desktop.yml`) auto-builds + publishes on `v*` tag push.
+  - First release: `v1.0.6` at `https://github.com/RonaldAllanRivera/auto-respond/releases/download/v1.0.6/MeetLessonsInstaller.exe`.
   - `DESKTOP_DOWNLOAD_URL` env var drives the **Download for Windows** button on `/devices/`.
-  - Full build guide in `desktop/BUILD.md`.
+  - `desktop/config.py` falls back to hardcoded production URL — packaged `.exe` works with zero user configuration.
+  - Full build guide in `desktop/BUILD.md`. Manual fallback via `desktop/build.bat`.
 - Phase 7 production hardening:
   - HTTPS security headers: `SECURE_PROXY_SSL_HEADER`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, HSTS (1 year, include subdomains, preload).
   - `CSRF_TRUSTED_ORIGINS` from `DJANGO_CSRF_TRUSTED_ORIGINS` env var (required for Render HTTPS POST forms).

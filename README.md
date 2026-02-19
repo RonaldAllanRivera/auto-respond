@@ -85,7 +85,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 7 — Render production hardening | Completed |
 | 8 — Dashboard realtime UX | Planned |
 | 9 — Frontend migration to Next.js | Planned |
-| 10 — Windows desktop installer | Planned |
+| 10 — Windows desktop installer | Completed |
 
 See `PLAN.md` for detailed phased deliverables.
 
