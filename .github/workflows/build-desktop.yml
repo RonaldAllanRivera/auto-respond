@@ -31,9 +31,23 @@ jobs:
 
       - name: Download Tesseract installer
         run: |
-          $url  = "https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
-          $dest = "desktop/installer/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
-          Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/UB-Mannheim/tesseract/releases/latest" -Headers @{
+            "Accept" = "application/vnd.github+json"
+            "User-Agent" = "meet-lessons-build"
+          }
+
+          $asset = $release.assets |
+            Where-Object { $_.name -like "tesseract-ocr-w64-setup-*.exe" } |
+            Select-Object -First 1
+
+          if (-not $asset) {
+            throw "Could not find Tesseract installer asset (tesseract-ocr-w64-setup-*.exe) in latest UB-Mannheim release."
+          }
+
+          $dest = "desktop/installer/$($asset.name)"
+          "TESSERACT_INSTALLER=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $dest
 
       - name: Build MeetLessons.exe with PyInstaller
         working-directory: desktop
@@ -53,6 +67,10 @@ jobs:
           $version = "${{ github.ref_name }}" -replace '^v', ''
           $iss = Get-Content "desktop/installer/MeetLessons.iss" -Raw
           $iss = $iss -replace '#define APP_VERSION ".*"', "#define APP_VERSION `"$version`""
+          if (-not $env:TESSERACT_INSTALLER) {
+            throw "TESSERACT_INSTALLER was not set. The previous step should write it to GITHUB_ENV."
+          }
+          $iss = $iss -replace '#define TESSERACT_INSTALLER ".*"', "#define TESSERACT_INSTALLER `"$($env:TESSERACT_INSTALLER)`""
           Set-Content "desktop/installer/MeetLessons_ci.iss" $iss
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "desktop/installer/MeetLessons_ci.iss"
           Remove-Item "desktop/installer/MeetLessons_ci.iss"
