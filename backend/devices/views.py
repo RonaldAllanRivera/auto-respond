@@ -1,6 +1,7 @@
 import json
 import secrets
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -55,6 +56,7 @@ def devices_view(request: HttpRequest) -> HttpResponse:
             "billing_enforced": billing_enforced,
             "subscription_active": subscription_active,
             "auto_revoked_count": auto_revoked_count,
+            "desktop_download_url": settings.DESKTOP_DOWNLOAD_URL,
         },
     )
 

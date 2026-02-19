@@ -107,6 +107,14 @@ Security notes:
 - Never commit real Stripe secret keys or webhook secrets to git.
 - Rotate secrets immediately if they are accidentally exposed.
 
+## Desktop app download
+
+- `DESKTOP_DOWNLOAD_URL`
+  - Optional. When set, a **Download for Windows** button appears on the `/devices/` page.
+  - Set to the GitHub Release direct download URL after publishing the installer.
+  - Example: `https://github.com/<your-org>/<repo>/releases/download/v1.0.0/MeetLessonsInstaller.exe`
+  - See `desktop/BUILD.md` for the full build + publish workflow.
+
 ## Device pairing
 
 The desktop app uses **device pairing + server-issued device tokens** for desktop-app-to-backend requests.

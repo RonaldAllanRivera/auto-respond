@@ -38,3 +38,14 @@ Thumbs.db
 
 # Local copies
 .env copy.example
+
+# Desktop app build assets (raw icon source — not committed)
+desktop/favicon_io/
+
+# PyInstaller build artifacts
+desktop/build/
+desktop/dist/
+desktop/*.spec
+
+# Inno Setup installer output
+desktop/installer/tesseract-ocr-w64-setup*.exe

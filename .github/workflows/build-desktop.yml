@@ -1,0 +1,81 @@
+name: Build Desktop Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pyinstaller
+          pip install -r desktop/requirements.txt
+        shell: cmd
+
+      - name: Download Tesseract installer
+        run: |
+          $url = "https://github.com/UB-Mannheim/tesseract/releases/download/v5.5.0.20241111/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
+          $dest = "desktop\installer\tesseract-ocr-w64-setup-5.5.0.20241111.exe"
+          Invoke-WebRequest -Uri $url -OutFile $dest
+        shell: pwsh
+
+      - name: Build MeetLessons.exe with PyInstaller
+        run: |
+          pyinstaller ^
+            --onefile ^
+            --windowed ^
+            --name MeetLessons ^
+            --icon assets\icon.ico ^
+            --add-data ".env.example;." ^
+            main.py
+        shell: cmd
+        working-directory: desktop
+
+      - name: Install Inno Setup 6
+        run: |
+          choco install innosetup --yes --no-progress
+        shell: cmd
+
+      - name: Compile installer with Inno Setup
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $iss = Get-Content "desktop\installer\MeetLessons.iss" -Raw
+          $iss = $iss -replace '#define APP_VERSION ".*"', "#define APP_VERSION `"$version`""
+          Set-Content "desktop\installer\MeetLessons_ci.iss" $iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "desktop\installer\MeetLessons_ci.iss"
+          Remove-Item "desktop\installer\MeetLessons_ci.iss"
+        shell: pwsh
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Meet Lessons ${{ github.ref_name }} — Windows Installer"
+          body: |
+            ## Meet Lessons ${{ github.ref_name }}
+
+            ### Install
+            1. Download `MeetLessonsInstaller.exe` below.
+            2. Double-click it and follow the wizard.
+            3. Tesseract OCR installs automatically — no extra steps needed.
+
+            ### After install
+            Open Meet Lessons from the Start Menu or desktop shortcut.
+            Pair your device at your Meet Lessons dashboard → **Devices**.
+          files: desktop/dist/MeetLessonsInstaller.exe
+          draft: false
+          prerelease: false
