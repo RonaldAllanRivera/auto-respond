@@ -6,6 +6,8 @@ Usage:
     python manage.py seed_site --domain=myapp.onrender.com --name="Production"
 """
 
+import os
+
 from django.conf import settings
 from django.contrib.sites.models import Site
 from django.core.management.base import BaseCommand
@@ -15,10 +17,15 @@ class Command(BaseCommand):
     help = "Seed the Sites framework (Site id=SITE_ID) with the correct domain and display name."
 
     def add_arguments(self, parser):
+        default_domain = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        if not default_domain:
+            allowed = os.environ.get("DJANGO_ALLOWED_HOSTS", "")
+            default_domain = allowed.split(",")[0].strip() if allowed.strip() else "localhost:8000"
+
         parser.add_argument(
             "--domain",
-            default="localhost:8000",
-            help="Domain name for the site (default: localhost:8000)",
+            default=default_domain,
+            help="Domain name for the site (default: derived from env, else localhost:8000)",
         )
         parser.add_argument(
             "--name",
