@@ -576,6 +576,30 @@ Run it **twice total** — one output per secret. Never reuse the same value for
    ```bash
    python manage.py createsuperuser
    ```
+   If you're on a **free Render instance** and **Shell is not supported**, create the superuser from your laptop by connecting directly to Render Postgres:
+
+   1. Render Dashboard → your **PostgreSQL** → **Connections**
+   2. Copy the **External Database URL** (this is accessible from your machine)
+      Example format:
+      ```text
+      postgres://USER:PASSWORD@HOST:5432/DBNAME
+      ```
+   3. From your repo root, run:
+      ```bash
+      DATABASE_URL='paste_external_db_url_here' \
+      DJANGO_DEBUG=0 \
+      DJANGO_SECRET_KEY='use_the_same_one_on_render' \
+      DJANGO_ALLOWED_HOSTS='your-app.onrender.com' \
+      DJANGO_CSRF_TRUSTED_ORIGINS='https://your-app.onrender.com' \
+      python3 backend/manage.py createsuperuser
+      ```
+      Notes:
+      - Use the same `DJANGO_SECRET_KEY` value you set on Render.
+      - If your Render DB requires TLS and the URL doesn’t include it, append `?sslmode=require` to `DATABASE_URL`.
+   4. Log in at:
+      ```
+      https://your-app.onrender.com/admin/
+      ```
 2. Django Admin → **Sites** → set domain to `your-app.onrender.com`
 3. Django Admin → **Social Applications** → update Google OAuth credentials
 4. Django Admin → **Billing → Billing plans** → set `stripe_monthly_price_id` to your `price_...`
