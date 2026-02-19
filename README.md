@@ -481,7 +481,8 @@ This project is designed to deploy on [Render](https://render.com) as a **Web Se
 3. Settings:
    - **Branch:** `main`
    - **Runtime:** `Docker`
-   - **Dockerfile path:** `./Dockerfile` (auto-detected)
+   - **Dockerfile path:** `./backend/Dockerfile`
+   - **Docker context:** `./backend`
    - **Region:** choose closest to your users
 4. Click **Create Web Service** (don't deploy yet — set env vars first)
 
@@ -515,6 +516,14 @@ In your Web Service → **Environment** tab, add all of the following:
 > python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 > ```
 
+Run this again for `DEVICE_TOKEN_SECRET` — it's the same command, just generates a fresh independent key:
+
+Run it **twice total** — one output per secret. Never reuse the same value for both. They're independent signing keys used for different purposes:
+
+| Variable | Purpose |
+|---|---|
+| `DJANGO_SECRET_KEY` | Django session/cookie/CSRF signing |
+| `DEVICE_TOKEN_SECRET` | Desktop device token signing (HMAC) |
 ---
 
 ### Step 4 — Configure Google OAuth for production
