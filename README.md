@@ -492,6 +492,8 @@ This project is designed to deploy on [Render](https://render.com) as a **Web Se
 
 In your Web Service → **Environment** tab, add all of the following:
 
+Database best practice (Render): set **`DATABASE_URL`** using the Render Postgres **Internal Database URL**. Do **not** set `POSTGRES_HOST=localhost/127.0.0.1` on Render.
+
 | Variable | Value |
 |---|---|
 | `DJANGO_SECRET_KEY` | Generate a strong random key (50+ chars) |
