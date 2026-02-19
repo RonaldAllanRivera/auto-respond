@@ -31,9 +31,9 @@ jobs:
 
       - name: Download Tesseract installer
         run: |
-          $url  = "https://github.com/UB-Mannheim/tesseract/releases/download/v5.5.0.20241111/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
+          $url  = "https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
           $dest = "desktop/installer/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
-          Invoke-WebRequest -Uri $url -OutFile $dest
+          Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
 
       - name: Build MeetLessons.exe with PyInstaller
         working-directory: desktop
