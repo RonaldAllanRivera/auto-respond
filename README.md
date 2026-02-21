@@ -619,6 +619,61 @@ Run it **twice total** — one output per secret. Never reuse the same value for
 
 ---
 
+### Using Neon Postgres (free, no expiry — recommended over Render Postgres)
+
+Render's free PostgreSQL instance **expires after 30 days**. [Neon](https://neon.tech) is a free, serverless Postgres provider with no expiry and a generous free tier — ideal for small production deployments (1–10 users).
+
+#### Step A — Create a Neon project
+
+1. Sign up at [neon.tech](https://neon.tech) (free, no credit card)
+2. **New Project** → name it `meet-lessons`
+3. Choose a region closest to your Render service
+4. Neon creates a default database and user automatically
+5. Go to your project → **Dashboard** → **Connection Details**
+6. Select **Connection string** → copy the URL:
+   ```text
+   postgres://USER:PASSWORD@HOST/DBNAME?sslmode=require
+   ```
+   > Neon always requires SSL — the `?sslmode=require` is already included.
+
+#### Step B — Update `DATABASE_URL` on Render
+
+1. Render → your **Web Service** → **Environment**
+2. Update `DATABASE_URL` to the Neon connection string from Step A
+3. Click **Save Changes**
+4. Render → **Manual Deploy** → **Deploy latest commit**
+
+Django will run `migrate` on startup and create all tables in the new Neon DB automatically.
+
+#### Step C — Create a superuser against Neon (from your laptop)
+
+Since Render free tier has no Shell, run this locally:
+
+```bash
+DATABASE_URL='paste_neon_connection_string_here' \
+DJANGO_DEBUG=0 \
+DJANGO_SECRET_KEY='use_the_same_one_on_render' \
+DJANGO_ALLOWED_HOSTS='auto-respond-tdp7.onrender.com' \
+DJANGO_CSRF_TRUSTED_ORIGINS='https://auto-respond-tdp7.onrender.com' \
+python3 backend/manage.py createsuperuser
+```
+
+Then log in at `https://your-app.onrender.com/admin/`.
+
+#### Step D — Delete the Render Postgres instance (optional)
+
+Once Neon is working, you can delete the Render Postgres to free up the slot:
+
+- Render Dashboard → your **PostgreSQL** → **Settings** → **Delete Database**
+
+> **Best practices for Neon free tier:**
+> - Free tier: 0.5 GB storage, 1 compute unit, auto-suspend after 5 min inactivity (cold start ~1–2s)
+> - Do **not** store large binary files in the DB (use S3/Cloudflare R2 for that)
+> - Keep connection pooling in mind if you scale beyond ~10 concurrent users (use Neon's built-in pooler URL)
+> - Neon connection string format: `postgres://USER:PASSWORD@HOST/DBNAME?sslmode=require`
+
+---
+
 ### Updating the desktop download URL (future releases)
 
 When you publish a new installer version:
