@@ -1,4 +1,4 @@
-from allauth.account import app_settings
+from django.contrib.auth import REDIRECT_FIELD_NAME
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 
@@ -9,8 +9,7 @@ def _has_explicit_next(request) -> bool:
     if request is None:
         return False
 
-    key = app_settings.REDIRECT_FIELD_NAME
-    return bool(request.GET.get(key) or request.POST.get(key))
+    return bool(request.GET.get(REDIRECT_FIELD_NAME) or request.POST.get(REDIRECT_FIELD_NAME))
 
 
 def _should_go_to_subscribe(request) -> bool:
