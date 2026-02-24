@@ -649,6 +649,8 @@ Django will run `migrate` on startup and create all tables in the new Neon DB au
 
 Since Render free tier has no Shell, run this locally:
 
+> Note: If your Neon connection string includes `channel_binding=require` (common on some **pooler** URLs), remove that parameter for this local command (or use Neon's **direct** connection string). Some Postgres client stacks may not support it.
+
 ```bash
 DATABASE_URL='paste_neon_connection_string_here' \
 DJANGO_DEBUG=0 \
