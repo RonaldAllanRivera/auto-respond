@@ -265,12 +265,17 @@ Use Django Admin as the primary CMS:
 - Structured console logging (`LOGGING` config) ✓
 - Gunicorn (production WSGI server) in Dockerfile CMD ✓
 
-### Deploy checkpoint — Render production deploy (do before Phase 8)
-- Push all completed phases to `main` and trigger a Render redeploy.
-- Set `DESKTOP_DOWNLOAD_URL` on Render environment (same GitHub Releases URL as local `.env`).
-- Verify `/devices/` shows the **Download for Windows** button in production.
-- Verify Stripe webhooks, Google login, and device pairing work end-to-end on Render.
-- Smoke-test the full student flow: login → subscribe → pair device → capture → see answer on dashboard.
+### Deploy checkpoint — Render production deploy (Completed 2026-02-24)
+- Push all completed phases to `main` and trigger a Render redeploy. ✓
+- Migrate from Render Postgres to Neon Postgres (free tier, no expiry). ✓
+- Set `DATABASE_URL` on Render to Neon connection string. ✓
+- Set `SITE_ID=1` on Render environment. ✓
+- Fix Google OAuth `MultipleObjectsReturned` error (removed programmatic APP config from settings.py). ✓
+- Configure Google OAuth via Django Admin (Social Applications). ✓
+- Set `DESKTOP_DOWNLOAD_URL` on Render environment (same GitHub Releases URL as local `.env`). ✓
+- Verify `/devices/` shows the **Download for Windows** button in production. ✓
+- Verify Google login works end-to-end on Render. ✓
+- **Remaining:** Configure Stripe production webhook, verify device pairing, smoke-test full student flow.
 
 ### Phase 8 — Dashboard realtime UX (Django templates, pre-Next.js)
 - Add **"Latest Q&A" panel** on `/` (dashboard home) — shows the most recent question + AI answer for the logged-in user.

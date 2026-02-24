@@ -329,6 +329,32 @@ git push origin v1.x.x
 ```
 GitHub Actions builds and publishes automatically. Update `DESKTOP_DOWNLOAD_URL` on Render to the new release URL.
 
+## Production deployment verification (Render + Neon) ✓
+
+### Neon Postgres migration ✓
+
+- Neon project created: `meet-lessons` database.
+- `DATABASE_URL` updated on Render to Neon connection string (with `channel_binding=require` for production).
+- Django migrations ran successfully against Neon on deployment.
+- Superuser created locally against Neon database (Render free tier has no Shell).
+- Admin accessible at `https://auto-respond-tdp7.onrender.com/admin/`.
+
+### Google OAuth configuration ✓
+
+- Google Cloud Console redirect URI configured: `https://auto-respond-tdp7.onrender.com/accounts/google/login/callback/`.
+- Django Admin → **Sites** → domain set to `auto-respond-tdp7.onrender.com`.
+- Django Admin → **Social Applications** → Google OAuth app created with Client ID and Secret Key.
+- `MultipleObjectsReturned` error fixed by removing programmatic APP config from `settings.py`.
+- `SITE_ID=1` environment variable added to Render.
+- Google login working at `https://auto-respond-tdp7.onrender.com/accounts/login/`.
+
+### Remaining production tasks
+
+- Configure Stripe production webhook endpoint.
+- Set `STRIPE_WEBHOOK_SECRET` on Render.
+- Configure Django Admin → **Billing → Billing plans** → set `stripe_monthly_price_id`.
+- Smoke test: login → subscribe → pair device → capture → see answer on dashboard.
+
 ## What's next (Phase 8)
 
 - Dashboard realtime UX: latest Q&A panel on home, SSE/polling updates

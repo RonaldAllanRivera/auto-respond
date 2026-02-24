@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Production deployment to Render (2026-02-24):
+  - Migrated from Render Postgres to Neon Postgres (free tier, no expiry).
+  - Neon setup tutorial added to README.md with connection pooling best practices.
+  - Local development venv setup documented in LOCAL.md (gitignored, contains production secrets).
+  - Management commands: `cleanup_oauth.py` and `fix_socialapp.py` for debugging django-allauth issues.
 - SaaS roadmap: Google login, Stripe subscriptions (monthly), coupon codes, and Render deployment (see `PLAN.md`).
 - Fresh Django SaaS-first scaffold with separate apps (`accounts`, `billing`, `devices`, `lessons`).
 - Docker Compose local development stack (Django + Postgres).
@@ -117,6 +122,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Static assets (admin CSS/JS) failing with MIME type errors: added WhiteNoise, configured `STATICFILES_STORAGE`, and run `collectstatic` at container start.
 - Pairing code expiry display: replaced static UTC timestamp with a dynamic JavaScript countdown timer (timezone-agnostic).
 - Migration dependency: fixed missing `0002_billingplan` reference; renumbered lesson migrations to `0002`/`0003`.
+- Google OAuth `MultipleObjectsReturned` error (2026-02-24):
+  - Root cause: `settings.py` was programmatically adding Google OAuth APP config via `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` env vars, conflicting with database-backed `SocialApp`.
+  - Fix: Removed programmatic APP configuration from `SOCIALACCOUNT_PROVIDERS`. Google OAuth credentials now configured exclusively via Django Admin.
+  - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars are no longer used by the application.
 
 ### Documentation
 - Complete rewrite of README.md, PLAN.md, ENV.md, TEST.md for desktop app architecture.

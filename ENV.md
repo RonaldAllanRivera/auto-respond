@@ -52,8 +52,14 @@ Recommended settings:
 
 - `DJANGO_DEBUG=0`
 - `DJANGO_ALLOWED_HOSTS=<your-service>.onrender.com`
+- `SITE_ID=1` (required for django-allauth to correctly identify the Site)
 
-You should also configure database variables from Render Postgres.
+Database configuration:
+
+- `DATABASE_URL` (recommended): Use Neon Postgres connection string for production.
+  - Example: `postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require&channel_binding=require`
+  - Neon is free, serverless, and has no expiry (unlike Render Postgres free tier).
+  - See README.md "Using Neon Postgres" section for setup tutorial.
 
 ## OpenAI
 
@@ -65,12 +71,19 @@ You should also configure database variables from Render Postgres.
 
 ### Google OAuth
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
+**Note:** As of 2026-02-24, Google OAuth credentials are configured **exclusively via Django Admin** (Social Applications), not via environment variables.
 
-Notes:
+- ~~`GOOGLE_CLIENT_ID`~~ (deprecated - no longer used)
+- ~~`GOOGLE_CLIENT_SECRET`~~ (deprecated - no longer used)
 
-- See README.md for required redirect URI(s) and the Django Sites domain configuration for allauth.
+Setup:
+
+1. Configure redirect URI in Google Cloud Console: `https://your-app.onrender.com/accounts/google/login/callback/`
+2. Django Admin → **Sites** → set domain to `your-app.onrender.com`
+3. Django Admin → **Social Applications** → add Google provider with Client ID and Secret Key
+4. Link the Social Application to your Site
+
+See README.md "Deploy to Render" section for detailed setup instructions.
 
 ### Stripe
 
