@@ -50,3 +50,5 @@ desktop/*.spec
 
 # Inno Setup installer output
 desktop/installer/tesseract-ocr-w64-setup*.exe
+
+debug_oauth.sh
