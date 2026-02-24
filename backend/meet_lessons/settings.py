@@ -153,12 +153,9 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 
-if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
-    SOCIALACCOUNT_PROVIDERS["google"]["APP"] = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "secret": GOOGLE_CLIENT_SECRET,
-        "key": "",
-    }
+# Note: Google OAuth credentials are configured via Django Admin (Social Applications)
+# not via environment variables. This avoids conflicts with django-allauth's database-backed
+# SocialApp model.
 
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
