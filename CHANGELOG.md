@@ -8,11 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Production deployment to Render (2026-02-24):
+- Production deployment to Render (2026-02-24 to 2026-02-26):
   - Migrated from Render Postgres to Neon Postgres (free tier, no expiry).
   - Neon setup tutorial added to README.md with connection pooling best practices.
   - Local development venv setup documented in LOCAL.md (gitignored, contains production secrets).
   - Management commands: `cleanup_oauth.py` and `fix_socialapp.py` for debugging django-allauth issues.
+  - Stripe production webhook configured (2026-02-26):
+    - Stripe Workbench webhook destination created for Test mode.
+    - `STRIPE_WEBHOOK_SECRET` added to Render environment.
+    - `BillingPlan.stripe_monthly_price_id` configured in Django Admin.
+    - Successfully tested 3 subscriptions in production ($15/month).
+    - Updated all documentation to reflect new Stripe Workbench UI ("Add destination" workflow).
 - SaaS roadmap: Google login, Stripe subscriptions (monthly), coupon codes, and Render deployment (see `PLAN.md`).
 - Fresh Django SaaS-first scaffold with separate apps (`accounts`, `billing`, `devices`, `lessons`).
 - Docker Compose local development stack (Django + Postgres).

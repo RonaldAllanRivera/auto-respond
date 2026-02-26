@@ -348,12 +348,18 @@ GitHub Actions builds and publishes automatically. Update `DESKTOP_DOWNLOAD_URL`
 - `SITE_ID=1` environment variable added to Render.
 - Google login working at `https://auto-respond-tdp7.onrender.com/accounts/login/`.
 
+### Stripe production setup (Completed 2026-02-26)
+
+- ✅ Stripe Workbench webhook destination created for Test mode.
+- ✅ `STRIPE_WEBHOOK_SECRET` set on Render.
+- ✅ Django Admin → **Billing → Billing plans** → `stripe_monthly_price_id` set to `price_1I3P7Ttqqi8R6Jm05BJuPtQm`.
+- ✅ Successfully tested 3 subscriptions at `https://auto-respond-tdp7.onrender.com/billing/subscribe/`.
+- ✅ Verified webhook events delivered successfully (200 OK responses in Stripe Dashboard).
+- ✅ Verified subscription records created in Django Admin.
+
 ### Remaining production tasks
 
-- Configure Stripe production webhook destination (Workbench → Add destination → 3-step wizard).
-- Set `STRIPE_WEBHOOK_SECRET` on Render.
-- Configure Django Admin → **Billing → Billing plans** → set `stripe_monthly_price_id`.
-- Smoke test: login → subscribe → pair device → capture → see answer on dashboard.
+- Smoke test full student flow: login → subscribe → pair device → capture question → see AI answer on dashboard.
 
 ## What's next (Phase 8)
 

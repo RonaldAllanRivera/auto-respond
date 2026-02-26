@@ -92,9 +92,10 @@ See README.md "Deploy to Render" section for detailed setup instructions.
 
 Notes:
 
-- `STRIPE_SECRET_KEY` is required when testing billing locally.
+- `STRIPE_SECRET_KEY` is required when testing billing locally and in production.
 - `STRIPE_WEBHOOK_SECRET` is required for webhook signature verification.
-- For local development, this value usually comes from Stripe CLI forwarding output (`whsec_...`).
+- For local development, this value comes from Stripe CLI forwarding output (`whsec_...`).
+- For production, this value comes from the Stripe Workbench webhook destination signing secret (see README.md Part 2).
 
 Local webhook forwarding (Docker Stripe CLI):
 
@@ -114,6 +115,14 @@ Pricing notes:
 - The Stripe **Price ID** for that plan is configured via the Django Admin Billing Plan CMS (stored in the database), not via environment variables.
 - Coupon codes are also configured via Django Admin (`CouponCode`) and map to a Stripe Promotion Code ID or Coupon ID (Stripe may display shorter IDs depending on UI/version).
 - Device policy when billing is configured: users without an active subscription cannot pair devices, and active devices are auto-revoked on `/devices/`.
+
+Production setup (completed 2026-02-26):
+
+- Stripe Workbench webhook destination created for Test mode at `https://auto-respond-tdp7.onrender.com/billing/webhook/`.
+- `STRIPE_WEBHOOK_SECRET` configured on Render from Stripe Workbench signing secret.
+- `BillingPlan.stripe_monthly_price_id` set to `price_1I3P7Ttqqi8R6Jm05BJuPtQm` in Django Admin.
+- Successfully tested 3 subscriptions in production.
+- See README.md "Stripe subscriptions (setup guide)" for detailed instructions.
 
 Security notes:
 
