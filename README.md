@@ -291,29 +291,39 @@ This section covers connecting your **live Render app** (`https://auto-respond-t
 
 See the "Deploy to Render" section below for full deployment steps. Once deployed, return here to configure Stripe webhooks for production.
 
-#### 2.1 Create webhook endpoint in Stripe Dashboard
+#### 2.1 Create webhook destination in Stripe Dashboard
 
-1. [Stripe Dashboard](https://dashboard.stripe.com/test/webhooks) → **Test mode** (toggle in top-right)
-2. **Developers** → **Webhooks** → **Add endpoint**
-3. **Endpoint URL:**
-   ```
-   https://auto-respond-tdp7.onrender.com/billing/webhook/
-   ```
-   ⚠️ Replace `auto-respond-tdp7` with your actual Render service name
+1. [Stripe Dashboard](https://dashboard.stripe.com/test/workbench/webhooks) → **Test mode** (toggle in top-right)
+2. **Workbench** → **Webhooks** → **Add destination**
+3. **Step 1 - Select events:**
+   - Choose **"Your account"** (receive events from resources in this account)
+   - Click **"Selected events"** tab
+   - Select these 6 events:
+     - ✅ `checkout.session.completed`
+     - ✅ `customer.subscription.created`
+     - ✅ `customer.subscription.updated`
+     - ✅ `customer.subscription.deleted`
+     - ✅ `invoice.paid`
+     - ✅ `invoice.payment_failed`
+   - Click **Continue**
 
-4. **Events to send** → Select these 6 events:
-   - ✅ `checkout.session.completed`
-   - ✅ `customer.subscription.created`
-   - ✅ `customer.subscription.updated`
-   - ✅ `customer.subscription.deleted`
-   - ✅ `invoice.paid`
-   - ✅ `invoice.payment_failed`
+4. **Step 2 - Choose destination type:**
+   - Select **"Webhook destination"** (send to a webhook endpoint)
+   - Click **Continue**
 
-5. Click **Add endpoint**
+5. **Step 3 - Configure your destination:**
+   - **Destination name:** `Render production webhook` (or any name you prefer)
+   - **Endpoint URL:**
+     ```
+     https://auto-respond-tdp7.onrender.com/billing/webhook/
+     ```
+     ⚠️ Replace `auto-respond-tdp7` with your actual Render service name
+   - **Description (optional):** Leave blank or add notes
+   - Click **Create destination**
 
 #### 2.2 Copy the webhook signing secret to Render
 
-1. After creating the endpoint, click on it to view details
+1. After creating the destination, click on it to view details
 2. Under **Signing secret**, click **Reveal**
 3. Copy the secret (format: `whsec_...`)
 4. **Render Dashboard** → your Web Service → **Environment**
@@ -340,7 +350,7 @@ See the "Deploy to Render" section below for full deployment steps. Once deploye
 **Troubleshooting:**
 - **500 errors in Stripe webhook events**: Check Render logs for Python exceptions
 - **400 errors**: `STRIPE_WEBHOOK_SECRET` is incorrect or missing from Render environment
-- **No events appear**: Verify the endpoint URL matches your Render URL exactly (including `https://`)
+- **No events appear**: Verify the destination URL matches your Render URL exactly (including `https://`)
 - **Subscription not created**: Check that `BillingPlan.stripe_monthly_price_id` is set correctly in Django Admin
 
 #### 2.4 Enable Stripe Customer Portal (optional)
@@ -361,7 +371,8 @@ Now users can manage their subscriptions at: `https://auto-respond-tdp7.onrender
 1. **Stripe Dashboard** → Switch to **Live mode** (toggle in top-right)
 2. Create a new Product + Price (same as Part 1, but in Live mode)
 3. Update Django Admin → **Billing plans** → `stripe_monthly_price_id` to the **Live** `price_...`
-4. Create a **new webhook endpoint** for Live mode:
+4. Create a **new webhook destination** for Live mode:
+   - Follow the same steps as Part 2.1 (Add destination → Select events → Choose Webhook destination → Configure)
    - URL: `https://auto-respond-tdp7.onrender.com/billing/webhook/`
    - Same 6 events as before
    - Copy the **Live mode** signing secret
@@ -371,7 +382,7 @@ Now users can manage their subscriptions at: `https://auto-respond-tdp7.onrender
 6. Test with a real card (you'll be charged $15.00)
 7. Refund the test transaction in Stripe Dashboard if needed
 
-**Best practice:** Keep Test mode webhooks configured separately so you can test changes without affecting live customers.
+**Best practice:** Keep Test mode and Live mode webhook destinations configured separately so you can test changes without affecting live customers.
 
 ---
 
@@ -484,7 +495,7 @@ Database best practice (Render): set **`DATABASE_URL`** using the Render Postgre
 | `GOOGLE_CLIENT_ID` | From Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
 | `STRIPE_SECRET_KEY` | `sk_test_...` (Test mode) |
-| `STRIPE_WEBHOOK_SECRET` | `whsec_...` (from Render webhook endpoint — see Step 5) |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_...` (from Render webhook destination — see Step 5) |
 | `DEFAULT_GRADE_LEVEL` | `3` |
 | `DEFAULT_MAX_SENTENCES` | `2` |
 | `DESKTOP_DOWNLOAD_URL` | `https://github.com/RonaldAllanRivera/auto-respond/releases/download/v1.0.6/MeetLessonsInstaller.exe` |
@@ -519,31 +530,23 @@ Run it **twice total** — one output per secret. Never reuse the same value for
 
 ### Step 5 — Configure Stripe webhook for production
 
-**Important:** Production webhooks use a **different signing secret** than local Stripe CLI. You must configure a webhook endpoint in Stripe Dashboard.
+**Important:** Production webhooks use a **different signing secret** than local Stripe CLI. You must configure a webhook destination in Stripe Dashboard.
 
-#### 5.1 Create webhook endpoint in Stripe Dashboard
+**See detailed instructions in the "Stripe subscriptions" section above (Part 2).**
 
-1. [Stripe Dashboard](https://dashboard.stripe.com/test/webhooks) → **Test mode** (for now)
-2. **Developers** → **Webhooks** → **Add endpoint**
-3. **Endpoint URL:**
-   ```
-   https://auto-respond-tdp7.onrender.com/billing/webhook/
-   ```
-   ⚠️ Replace `auto-respond-tdp7` with your actual Render service name
+Quick summary:
 
-4. **Events to send** → Select these 6 events:
-   - ✅ `checkout.session.completed`
-   - ✅ `customer.subscription.created`
-   - ✅ `customer.subscription.updated`
-   - ✅ `customer.subscription.deleted`
-   - ✅ `invoice.paid`
-   - ✅ `invoice.payment_failed`
+1. [Stripe Dashboard](https://dashboard.stripe.com/test/workbench/webhooks) → **Test mode**
+2. **Workbench** → **Webhooks** → **Add destination**
+3. Follow the 3-step wizard:
+   - **Step 1:** Select the 6 required events
+   - **Step 2:** Choose "Webhook destination"
+   - **Step 3:** Enter URL: `https://auto-respond-tdp7.onrender.com/billing/webhook/`
+4. Copy the signing secret and add to Render
 
-5. Click **Add endpoint**
+#### 5.1 Copy the webhook signing secret
 
-#### 5.2 Copy the webhook signing secret
-
-1. After creating the endpoint, click on it to view details
+1. After creating the destination, click on it to view details
 2. Under **Signing secret**, click **Reveal**
 3. Copy the secret (format: `whsec_...`)
 4. **Render Dashboard** → your Web Service → **Environment**

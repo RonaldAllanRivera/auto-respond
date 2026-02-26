@@ -201,7 +201,7 @@ Use Django Admin as the primary CMS:
 - Render Web Service running Django (Docker or native build)
 - Render Postgres
 - Environment variables configured in Render dashboard
-- Stripe webhook endpoint exposed publicly (Render URL)
+- Stripe webhook destination exposed publicly (Render URL, configured via Workbench)
 
 ## 10) Phased implementation plan
 
@@ -275,7 +275,7 @@ Use Django Admin as the primary CMS:
 - Set `DESKTOP_DOWNLOAD_URL` on Render environment (same GitHub Releases URL as local `.env`). ✓
 - Verify `/devices/` shows the **Download for Windows** button in production. ✓
 - Verify Google login works end-to-end on Render. ✓
-- **Remaining:** Configure Stripe production webhook, verify device pairing, smoke-test full student flow.
+- **Remaining:** Configure Stripe production webhook destination (new Stripe UI: Workbench → Add destination → 3-step wizard), verify device pairing, smoke-test full student flow.
 
 ### Phase 8 — Dashboard realtime UX (Django templates, pre-Next.js)
 - Add **"Latest Q&A" panel** on `/` (dashboard home) — shows the most recent question + AI answer for the logged-in user.

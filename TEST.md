@@ -350,7 +350,7 @@ GitHub Actions builds and publishes automatically. Update `DESKTOP_DOWNLOAD_URL`
 
 ### Remaining production tasks
 
-- Configure Stripe production webhook endpoint.
+- Configure Stripe production webhook destination (Workbench → Add destination → 3-step wizard).
 - Set `STRIPE_WEBHOOK_SECRET` on Render.
 - Configure Django Admin → **Billing → Billing plans** → set `stripe_monthly_price_id`.
 - Smoke test: login → subscribe → pair device → capture → see answer on dashboard.
