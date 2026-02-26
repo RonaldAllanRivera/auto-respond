@@ -185,222 +185,197 @@ python -m venv .venv
 
 ## Stripe subscriptions (setup guide)
 
-This project uses **Stripe Checkout (subscription mode)** for recurring payments, a **Stripe webhook** to sync subscription status, and the **Stripe customer portal** for managing/canceling.
+This project uses **Stripe Checkout** for monthly subscriptions ($15.00 USD).
 
-Current billing offer:
+Subscription entitlement is enforced on AI answering endpoints when billing is configured.
 
-- **Flat rate: $15.00/month** (single monthly plan)
+---
 
-### Recommended workflow (best practice)
+### Part 1: Local development (Test mode)
 
-1. Use **Stripe Test mode** for development and end-to-end verification.
-2. Switch to **Live mode** only after:
-   - webhooks are verified in production
-   - you’ve tested cancel/payment-failed flows
-   - your production domain + HTTPS are configured
+Use this for local testing with `docker compose`.
 
-### Required env vars
+#### 1.1 Create a Stripe Product + Price (Test mode)
 
-In root `.env` (backend):
+1. [Stripe Dashboard](https://dashboard.stripe.com/test/products) → **Test mode** (toggle in top-right)
+2. **Products** → **Add product**
+3. Name: `Meet Lessons Monthly`
+4. Pricing:
+   - **Recurring** (not one-time)
+   - **Monthly** billing period
+   - Price: **$15.00 USD**
+5. Click **Save product**
+6. Copy the **Price ID** (format: `price_...`)
 
-- `STRIPE_SECRET_KEY=sk_test_...`
-- `STRIPE_WEBHOOK_SECRET=whsec_...`
+#### 1.2 Configure Django Admin
 
-### Create a Product + recurring Price
+1. Start local backend: `docker compose up --build`
+2. Create superuser: `docker compose exec web python manage.py createsuperuser`
+3. Login at `http://localhost:8000/admin/`
+4. **Billing → Billing plans** → edit the default plan
+5. Set `stripe_monthly_price_id` to your `price_...` from step 1.1
+6. Save
 
-In Stripe Dashboard (Test mode):
+#### 1.3 Set local environment variables
 
-1. Create a **Product**
-2. Create a **Recurring Price** (monthly, flat rate **$15.00 USD**)
-3. Copy the **Price ID** (`price_...`)
-4. In Django Admin, set it on the `BillingPlan` record:
-   - Admin → Billing → Billing plans → id=1 → `stripe_monthly_price_id=price_...`
-
-### Local webhook forwarding (Stripe CLI)
-
-The local webhook endpoint in this app is:
-
-- `http://localhost:8000/billing/webhook/`
-
-Docker Compose now includes a `stripe-cli` service that forwards webhooks to Django automatically.
-
-One-time auth setup:
+In root `.env` file:
 
 ```bash
-docker compose run --rm stripe-cli login
+STRIPE_SECRET_KEY=sk_test_...  # From Stripe Dashboard → Developers → API keys
+STRIPE_WEBHOOK_SECRET=whsec_...  # From Stripe CLI (see step 1.4)
 ```
 
-Then start the stack normally (includes webhook forwarding):
+#### 1.4 Set up local webhook forwarding (Stripe CLI)
 
-```bash
-docker compose up --build
-```
+Stripe webhooks cannot reach `localhost` directly. Use Stripe CLI to forward events:
 
-View Stripe listener logs:
+**Option A: Using Docker Compose (recommended)**
 
-```bash
-docker compose logs -f stripe-cli
-```
+1. Authenticate Stripe CLI (one-time):
+   ```bash
+   docker compose run --rm stripe-cli login
+   ```
+2. Start the full stack (includes automatic webhook forwarding):
+   ```bash
+   docker compose up --build
+   ```
+3. View webhook logs:
+   ```bash
+   docker compose logs -f stripe-cli
+   ```
+4. Copy the `whsec_...` signing secret from the logs into your `.env` as `STRIPE_WEBHOOK_SECRET`
+5. Restart: `docker compose up --build`
 
-Use Stripe CLI to forward webhooks to your local Docker backend:
+**Option B: Using Stripe CLI directly**
 
-```bash
-stripe login
-stripe listen --forward-to http://localhost:8000/billing/webhook/
-```
+1. Install Stripe CLI: [https://stripe.com/docs/stripe-cli](https://stripe.com/docs/stripe-cli)
+2. Login:
+   ```bash
+   stripe login
+   ```
+3. Forward webhooks to local Django:
+   ```bash
+   stripe listen --forward-to http://localhost:8000/billing/webhook/
+   ```
+4. Copy the `whsec_...` signing secret into your `.env` as `STRIPE_WEBHOOK_SECRET`
+5. Restart backend: `docker compose up --build`
 
-If Stripe CLI is not installed on your host machine, use Docker instead:
+#### 1.5 Test local subscription flow
 
-```bash
-docker run --rm -it --network=host \
-  -v "$HOME/.config/stripe:/root/.config/stripe" \
-  stripe/stripe-cli:latest login
+1. Visit `http://localhost:8000/billing/subscribe/`
+2. Click **Subscribe**
+3. Use Stripe test card: `4242 4242 4242 4242`, any future expiry, any CVC
+4. Complete checkout
+5. Verify in Django Admin:
+   - **Billing → Stripe events** (should show `checkout.session.completed`, etc.)
+   - **Billing → Stripe subscriptions** (should show active subscription)
+6. Test entitlement: visit `/devices/` and verify you can generate pairing codes
 
-docker run --rm -it --network=host \
-  -v "$HOME/.config/stripe:/root/.config/stripe" \
-  stripe/stripe-cli:latest listen --forward-to http://localhost:8000/billing/webhook/
-```
+#### 1.6 Test subscription cancellation
 
-The CLI will print a signing secret like `whsec_...`.
-Copy that into your local `.env` as `STRIPE_WEBHOOK_SECRET`.
+1. Visit `http://localhost:8000/billing/portal/`
+2. Cancel subscription
+3. Visit `/devices/` → active devices should auto-revoke
+4. Try to generate a pairing code → should be blocked
 
-### Webhook tutorial (end-to-end)
+---
 
-This app's webhook handler is:
+### Part 2: Production deployment (Render + Stripe Test mode)
 
-- `POST /billing/webhook/`
+This section covers connecting your **live Render app** (`https://auto-respond-tdp7.onrender.com`) to Stripe webhooks.
 
-It verifies the Stripe signature using `STRIPE_WEBHOOK_SECRET` and de-dupes events in the database.
+**Prerequisites:**
+- Render app deployed and accessible
+- Stripe Product + Price created (from Part 1, step 1.1)
+- Django Admin configured with `stripe_monthly_price_id` (from Part 1, step 1.2)
 
-#### Local development (recommended)
+See the "Deploy to Render" section below for full deployment steps. Once deployed, return here to configure Stripe webhooks for production.
 
-1. Start backend:
+#### 2.1 Create webhook endpoint in Stripe Dashboard
 
-```bash
-docker compose up --build
-```
+1. [Stripe Dashboard](https://dashboard.stripe.com/test/webhooks) → **Test mode** (toggle in top-right)
+2. **Developers** → **Webhooks** → **Add endpoint**
+3. **Endpoint URL:**
+   ```
+   https://auto-respond-tdp7.onrender.com/billing/webhook/
+   ```
+   ⚠️ Replace `auto-respond-tdp7` with your actual Render service name
 
-This starts:
+4. **Events to send** → Select these 6 events:
+   - ✅ `checkout.session.completed`
+   - ✅ `customer.subscription.created`
+   - ✅ `customer.subscription.updated`
+   - ✅ `customer.subscription.deleted`
+   - ✅ `invoice.paid`
+   - ✅ `invoice.payment_failed`
 
-- `db`
-- `web`
-- `stripe-cli` (automatic local webhook forwarding to `/billing/webhook/`)
+5. Click **Add endpoint**
 
-2. (Optional) If not using Compose `stripe-cli` service, start Stripe CLI forwarding manually:
+#### 2.2 Copy the webhook signing secret to Render
 
-```bash
-stripe login
-stripe listen --forward-to http://localhost:8000/billing/webhook/
-```
+1. After creating the endpoint, click on it to view details
+2. Under **Signing secret**, click **Reveal**
+3. Copy the secret (format: `whsec_...`)
+4. **Render Dashboard** → your Web Service → **Environment**
+5. Add or update:
+   ```
+   STRIPE_WEBHOOK_SECRET=whsec_...
+   ```
+   (paste the secret you just copied)
+6. Click **Save Changes**
+7. Render will auto-redeploy (takes ~2-3 minutes)
 
-3. Copy the signing secret printed by Stripe CLI into `.env`:
+#### 2.3 Verify webhook is working
 
-```bash
-STRIPE_WEBHOOK_SECRET=whsec_...
-```
+1. After Render redeploys, visit your app and complete a test subscription:
+   - `https://auto-respond-tdp7.onrender.com/billing/subscribe/`
+   - Use test card: `4242 4242 4242 4242`, any future expiry, any CVC
+2. Check **Stripe Dashboard** → **Webhooks** → your endpoint → **Events** tab
+   - Should show successful deliveries (green checkmarks, 200 OK responses)
+3. Check **Django Admin** → **Billing → Stripe events**
+   - Should show the received events (`checkout.session.completed`, etc.)
+4. Check **Django Admin** → **Billing → Stripe subscriptions**
+   - Should show your active subscription with correct status
 
-4. Restart backend so the new env var is loaded:
+**Troubleshooting:**
+- **500 errors in Stripe webhook events**: Check Render logs for Python exceptions
+- **400 errors**: `STRIPE_WEBHOOK_SECRET` is incorrect or missing from Render environment
+- **No events appear**: Verify the endpoint URL matches your Render URL exactly (including `https://`)
+- **Subscription not created**: Check that `BillingPlan.stripe_monthly_price_id` is set correctly in Django Admin
 
-```bash
-docker compose up --build
-```
+#### 2.4 Enable Stripe Customer Portal (optional)
 
-#### Send test events (Stripe CLI)
+1. [Stripe Dashboard](https://dashboard.stripe.com/test/settings/billing/portal) → **Settings** → **Billing** → **Customer portal**
+2. Toggle **Activate test link**
+3. Enable **Subscription cancellation** and **Payment method updates**
+4. Save
 
-In another terminal, you can emit Stripe test events:
+Now users can manage their subscriptions at: `https://auto-respond-tdp7.onrender.com/billing/portal/`
 
-```bash
-stripe trigger checkout.session.completed
-stripe trigger customer.subscription.updated
-stripe trigger invoice.paid
-stripe trigger invoice.payment_failed
-```
+---
 
-Then inspect:
+### Part 3: Moving to Live mode (production billing)
 
-- Docker logs: `docker compose logs --tail=200 web`
-- Django Admin tables:
-  - Billing → Stripe events
-  - Billing → Stripe subscriptions
+⚠️ **Only do this when you're ready to charge real customers.**
 
-#### Stripe Dashboard webhook vs Stripe CLI
+1. **Stripe Dashboard** → Switch to **Live mode** (toggle in top-right)
+2. Create a new Product + Price (same as Part 1, but in Live mode)
+3. Update Django Admin → **Billing plans** → `stripe_monthly_price_id` to the **Live** `price_...`
+4. Create a **new webhook endpoint** for Live mode:
+   - URL: `https://auto-respond-tdp7.onrender.com/billing/webhook/`
+   - Same 6 events as before
+   - Copy the **Live mode** signing secret
+5. Update Render environment:
+   - `STRIPE_SECRET_KEY=sk_live_...` (from Live mode API keys)
+   - `STRIPE_WEBHOOK_SECRET=whsec_...` (from Live mode webhook)
+6. Test with a real card (you'll be charged $15.00)
+7. Refund the test transaction in Stripe Dashboard if needed
 
-- Stripe Dashboard webhooks **cannot** call `localhost`.
-- For local development, use **Stripe CLI forwarding**.
-- For staging/production, you **must manually add** a Dashboard webhook endpoint with a real HTTPS URL:
-  - `https://your-domain.com/billing/webhook/`
-- Local-only rule:
-  - If you are using `stripe listen --forward-to ...`, you do **not** need to add a Dashboard endpoint for localhost.
+**Best practice:** Keep Test mode webhooks configured separately so you can test changes without affecting live customers.
 
-#### Production webhook setup
+---
 
-Stripe Dashboard → Developers → Webhooks:
-
-1. Add endpoint URL: `https://your-domain.com/billing/webhook/`
-2. Subscribe to the events listed below
-3. Copy the endpoint signing secret (`whsec_...`) into production env as `STRIPE_WEBHOOK_SECRET`
-4. Use a separate endpoint for Test mode and Live mode (best practice)
-5. Keep Stripe webhook retries enabled (default) and monitor failed deliveries
-
-#### Common failure modes
-
-- If `web` container crashes with `ModuleNotFoundError: stripe`:
-  - rebuild: `docker compose up --build`
-- If you see signature verification errors:
-  - confirm you copied the correct `whsec_...` for the environment (CLI vs Dashboard, Test vs Live)
-- If subscription status never updates:
-  - confirm Stripe is actually sending events (CLI shows deliveries)
-  - confirm the `BillingPlan.stripe_monthly_price_id` is set to your `price_...`
-
-### Stripe webhook events to enable
-
-Configure your webhook endpoint to send at least:
-
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.paid`
-- `invoice.payment_failed`
-
-### What you need to do next (Stripe + local verification)
-
-1. **Create Stripe Product + Monthly Price** (Test mode), then save `price_...` to Django Admin BillingPlan.
-2. **Set local env vars** in root `.env`:
-   - `STRIPE_SECRET_KEY=sk_test_...`
-   - `STRIPE_WEBHOOK_SECRET=whsec_...` (from Stripe CLI output)
-3. **Run local webhook forwarding**:
-
-```bash
-stripe listen --forward-to http://localhost:8000/billing/webhook/
-```
-
-4. **Verify local subscription flow**:
-   - open `/billing/subscribe/`
-   - complete Checkout in test mode
-   - confirm `StripeEvent` + `StripeSubscription` updated in Django Admin
-   - confirm entitlement checks on `/api/questions/`
-   - visit `/devices/` while unsubscribed and confirm active devices auto-revoke
-5. **Before production cutover**:
-   - add Dashboard webhook endpoint: `https://your-domain.com/billing/webhook/`
-   - enable minimum events:
-     - `checkout.session.completed`
-     - `customer.subscription.created`
-     - `customer.subscription.updated`
-     - `customer.subscription.deleted`
-     - `invoice.paid`
-     - `invoice.payment_failed`
-   - set production `STRIPE_WEBHOOK_SECRET` from Dashboard endpoint secret (not CLI secret)
-   - repeat one full subscription test in production/Test endpoint before enabling Live billing
-
-### Customer portal
-
-Stripe Dashboard → Settings → Billing → Customer portal:
-
-- Enable portal
-- Enable subscription cancellation and payment method updates (recommended)
-
-### Coupon codes
+## Coupon codes
 
 Coupon codes are managed in Django Admin (`CouponCode`) and applied to Stripe Checkout.
 
@@ -544,19 +519,58 @@ Run it **twice total** — one output per secret. Never reuse the same value for
 
 ### Step 5 — Configure Stripe webhook for production
 
-1. Stripe Dashboard → **Developers** → **Webhooks** → **Add endpoint**
-2. Endpoint URL:
+**Important:** Production webhooks use a **different signing secret** than local Stripe CLI. You must configure a webhook endpoint in Stripe Dashboard.
+
+#### 5.1 Create webhook endpoint in Stripe Dashboard
+
+1. [Stripe Dashboard](https://dashboard.stripe.com/test/webhooks) → **Test mode** (for now)
+2. **Developers** → **Webhooks** → **Add endpoint**
+3. **Endpoint URL:**
    ```
-   https://your-app.onrender.com/billing/webhook/
+   https://auto-respond-tdp7.onrender.com/billing/webhook/
    ```
-3. Subscribe to events:
-   - `checkout.session.completed`
-   - `customer.subscription.created`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
-   - `invoice.paid`
-   - `invoice.payment_failed`
-4. Copy the **Signing secret** (`whsec_...`) → set as `STRIPE_WEBHOOK_SECRET` in Render env
+   ⚠️ Replace `auto-respond-tdp7` with your actual Render service name
+
+4. **Events to send** → Select these 6 events:
+   - ✅ `checkout.session.completed`
+   - ✅ `customer.subscription.created`
+   - ✅ `customer.subscription.updated`
+   - ✅ `customer.subscription.deleted`
+   - ✅ `invoice.paid`
+   - ✅ `invoice.payment_failed`
+
+5. Click **Add endpoint**
+
+#### 5.2 Copy the webhook signing secret
+
+1. After creating the endpoint, click on it to view details
+2. Under **Signing secret**, click **Reveal**
+3. Copy the secret (format: `whsec_...`)
+4. **Render Dashboard** → your Web Service → **Environment**
+5. Add or update:
+   ```
+   STRIPE_WEBHOOK_SECRET=whsec_...
+   ```
+   (paste the secret you just copied)
+6. Click **Save Changes**
+7. Render will auto-redeploy
+
+#### 5.3 Verify webhook is working
+
+1. After Render redeploys, visit your app and complete a test subscription:
+   - `https://auto-respond-tdp7.onrender.com/billing/subscribe/`
+   - Use test card: `4242 4242 4242 4242`
+2. Check Stripe Dashboard → **Webhooks** → your endpoint → **Events**
+   - Should show successful deliveries (200 OK responses)
+3. Check Django Admin → **Billing → Stripe events**
+   - Should show the received events
+4. Check Django Admin → **Billing → Stripe subscriptions**
+   - Should show your active subscription
+
+**Troubleshooting:**
+- If webhook shows 500 errors: check Render logs for Python errors
+- If webhook shows 400 errors: `STRIPE_WEBHOOK_SECRET` is incorrect or missing
+- If no events appear: verify the endpoint URL matches your Render URL exactly
 
 ---
 
