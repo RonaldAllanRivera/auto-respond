@@ -127,6 +127,12 @@ class MeetLessonsApp:
 
         self.log_text.configure(state=tk.NORMAL)
         self.log_text.insert(tk.END, line)
+        
+        # Limit log to last 500 lines to prevent memory growth in long sessions
+        line_count = int(self.log_text.index('end-1c').split('.')[0])
+        if line_count > 500:
+            self.log_text.delete('1.0', f'{line_count - 500}.0')
+        
         self.log_text.see(tk.END)
         self.log_text.configure(state=tk.DISABLED)
 
@@ -333,7 +339,16 @@ class MeetLessonsApp:
     def _start_clipboard_watcher(self):
         if self._clipboard_job is not None:
             return
-        self._clipboard_last_sig = None
+        
+        # Initialize with current clipboard to ignore pre-existing images
+        try:
+            image = self._grab_image_from_clipboard(silent=True, convert_rgb=False)
+            if image is not None:
+                self._clipboard_last_sig = self._image_signature(image)
+                self._clipboard_seen.append(self._clipboard_last_sig)
+        except Exception:
+            pass
+        
         self._clipboard_poll_ms = self._CLIPBOARD_POLL_MS_MIN
         self._poll_clipboard()
 
@@ -394,6 +409,47 @@ class MeetLessonsApp:
             time.sleep(poll_s)
         return None
 
+    def _capture_screenshot(self, *, wait_for_clipboard: bool):
+        """Capture a screenshot from clipboard and process it."""
+        if not config.is_paired():
+            self.root.after(0, lambda: self._log("Not paired — pair your device first to enable capture"))
+            return
+
+        if wait_for_clipboard:
+            # Non-blocking wait for clipboard using polling
+            self.root.after(0, lambda: self._log("Waiting for screenshot — select region and press Ctrl+C"))
+            self._poll_for_clipboard_image(deadline=time.time() + 8.0)
+        else:
+            # Manual capture - grab immediately
+            try:
+                time.sleep(0.3)
+                image = self._grab_image_from_clipboard(silent=True)
+                if image is None:
+                    self.root.after(0, lambda: self._log("No image in clipboard — copy a screenshot first"))
+                    return
+                self._process_image(image)
+            except Exception as e:
+                self.root.after(0, lambda e=e: self._log(f"Screenshot capture error: {e}"))
+
+    def _poll_for_clipboard_image(self, deadline: float):
+        """Non-blocking clipboard polling using tkinter after() - prevents UI freezing."""
+        if time.time() >= deadline:
+            self.root.after(0, lambda: self._log("Screenshot timeout — try again: Print Screen → select region → Ctrl+C"))
+            return
+        
+        try:
+            image = self._grab_image_from_clipboard(silent=True)
+            if image is not None:
+                # Got image! Process it
+                self._process_image(image)
+                return
+        except Exception as e:
+            self.root.after(0, lambda e=e: self._log(f"Clipboard error: {e}"))
+            return
+        
+        # No image yet, poll again in 200ms (non-blocking)
+        self.root.after(200, lambda: self._poll_for_clipboard_image(deadline))
+
     def _process_image(self, image: Image.Image):
         if self._processing:
             return
@@ -441,7 +497,11 @@ class MeetLessonsApp:
                     f"Found {len(questions)} question(s): {questions[0][:80]}..."
                 ))
 
-                result = api_client.send_caption(text=payload_text, speaker="", meeting_title="Screen Capture")
+                # Group all captures from the same day into one lesson
+                from datetime import datetime
+                daily_meeting_id = f"screen-capture-{datetime.now().strftime('%Y-%m-%d')}"
+                
+                result = api_client.send_caption(text=payload_text, speaker="", meeting_id=daily_meeting_id, meeting_title="")
                 self.root.after(0, lambda: self._log(
                     f"Caption sent → lesson {result.get('lesson_id')}, "
                     f"chunk {result.get('chunk_id')}, new={result.get('created')}"
@@ -450,7 +510,7 @@ class MeetLessonsApp:
                 for q in questions:
                     try:
                         result = api_client.send_question(
-                            question=q, context=payload_text, meeting_title="Screen Capture"
+                            question=q, context=payload_text, meeting_id=daily_meeting_id, meeting_title=""
                         )
                         self.root.after(0, lambda q=q, r=result: self._log(
                             f"Question sent → ID {r.get('question_id')}: {q[:60]}"
@@ -478,43 +538,6 @@ class MeetLessonsApp:
                     target=lambda img=pending: self._process_image(img),
                     daemon=True,
                 ).start()
-
-    def _capture_screenshot(self, *, wait_for_clipboard: bool):
-        """Grab screenshot from clipboard, OCR it, detect questions, send to backend."""
-        if self._processing:
-            return
-
-        # Block capture entirely when not paired (paywall enforcement)
-        if not config.is_paired():
-            self.root.after(0, lambda: self._log("Not paired — pair your device first to enable capture"))
-            return
-
-        try:
-            if wait_for_clipboard:
-                self.root.after(0, lambda: self._log(
-                    "Waiting for clipboard image — select region then press Ctrl+C"
-                ))
-                image = self._wait_for_clipboard_image()
-                if image is None:
-                    self.root.after(0, lambda: self._log(
-                        "No clipboard image detected. Try: Print Screen → select region → Ctrl+C, then try again."
-                    ))
-                    return
-            else:
-                time.sleep(0.3)
-                image = self._grab_image_from_clipboard(silent=True)
-                if image is None:
-                    self.root.after(0, lambda: self._log("No image in clipboard — capturing screen"))
-                    image = ImageGrab.grab()
-
-            if image is None:
-                self.root.after(0, lambda: self._log("ERROR: Could not capture screenshot"))
-                return
-
-            self._process_image(image)
-        finally:
-            pass
-
     # ------------------------------------------------------------------ Misc
 
     def _open_dashboard(self):

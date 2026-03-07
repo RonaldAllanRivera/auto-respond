@@ -1,10 +1,12 @@
 """
-Question and calculation detector for OCR-extracted text.
+Question and prompt detector for OCR-extracted text.
 
 Scans text for:
-  1. Sentences ending with '?'
-  2. Sentences starting with interrogative words (what, why, where, etc.)
+  1. Interrogative questions (what, why, where, who, when, how, etc.)
+  2. Imperative prompts (explain, describe, define, compare, etc.)
   3. Math expressions (e.g. "1 + 1", "what is 5 x 3")
+  
+All detected prompts are sent to the AI for answering.
 """
 
 import re
@@ -12,6 +14,14 @@ import re
 INTERROGATIVE_WORDS = {
     "what", "when", "where", "who", "why", "how",
     "which", "whom", "whose",
+}
+
+# Imperative/command words that indicate questions or prompts
+IMPERATIVE_WORDS = {
+    "explain", "describe", "define", "compare", "contrast",
+    "summarize", "discuss", "analyze", "evaluate", "identify",
+    "list", "name", "state", "give", "provide", "show",
+    "tell", "calculate", "solve", "find", "determine",
 }
 
 _URL_RE = re.compile(
@@ -85,45 +95,60 @@ def looks_like_noise(text: str) -> bool:
 
 def detect_questions(text: str) -> list[str]:
     """
-    Extract all questions from OCR text.
+    Extract all meaningful text from OCR for AI processing.
+    
+    NEW BEHAVIOR: Sends ALL non-noise text to backend, not just questions.
+    The backend AI will decide what to answer based on persona/description.
+    
+    Examples that will be sent:
+    - Questions: "What is Python?", "How does this work?"
+    - Prompts: "Explain Python", "Describe photosynthesis"
+    - Single words: "photosynthesis", "mitosis"
+    - Math: "5 + 3", "1/4 x 1/5"
+    - Statements: Any meaningful text
 
-    Returns a list of question strings found in the text.
+    Returns a list of text segments to send to AI.
     """
     if not text or len(text) < 3:
         return []
 
-    questions: list[str] = []
+    prompts: list[str] = []
     seen: set[str] = set()
 
     cleaned = clean_transcript_text(text) or text
+    
+    # If cleaned text is short (single word or phrase), send it as-is
+    if len(cleaned.split()) <= 5:
+        if not looks_like_noise(cleaned):
+            return [cleaned.strip()]
+    
+    # For longer text, split into sentences and send each
     sentences = _split_sentences(cleaned)
 
     for sentence in sentences:
         if _is_urlish(sentence):
             continue
-        words = sentence.split()
-        if not words:
+        if not sentence or len(sentence) < 3:
             continue
+            
+        # Send ALL sentences (no keyword filtering)
+        prompt = sentence.strip()
+        prompt_key = prompt.lower()
+        
+        if prompt_key not in seen:
+            seen.add(prompt_key)
+            prompts.append(prompt)
 
-        first_word = re.sub(r"[^a-zA-Z]", "", words[0].lower())
-        if first_word in INTERROGATIVE_WORDS:
-            q = sentence.strip()
-            if not q.endswith("?"):
-                q += "?"
-            qk = q.lower()
-            if len(q) > 3 and qk not in seen:
-                seen.add(qk)
-                questions.append(q)
-
+    # Also detect math expressions and send them
     for match in MATH_PATTERN.finditer(cleaned):
         expr = " ".join(match.group(0).strip().split())
-        q = f"What is {expr}?"
-        qk = q.lower()
-        if qk not in seen:
-            seen.add(qk)
-            questions.append(q)
+        prompt = f"What is {expr}?"
+        prompt_key = prompt.lower()
+        if prompt_key not in seen:
+            seen.add(prompt_key)
+            prompts.append(prompt)
 
-    return questions
+    return prompts
 
 
 def has_questions(text: str) -> bool:
