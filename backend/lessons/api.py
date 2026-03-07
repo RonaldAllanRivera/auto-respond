@@ -1,8 +1,14 @@
 """
-API views for caption ingestion and question submission.
+API views for caption ingestion, question submission, and document upload.
 
-All endpoints require device token authentication via X-Device-Token header.
-Used by the desktop app (screenshot OCR capture tool).
+Device token endpoints (X-Device-Token header):
+- POST /api/captions/
+- POST /api/questions/
+- GET /api/lessons/list/
+
+Session auth endpoints (login required):
+- POST /api/lessons/upload/
+- GET /api/questions/<id>/stream/
 """
 
 import hashlib
@@ -11,6 +17,8 @@ import time
 from datetime import date
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.db import IntegrityError
 from django.http import HttpRequest, JsonResponse, StreamingHttpResponse
 from django.utils import timezone
@@ -23,6 +31,11 @@ from billing.entitlements import user_has_active_subscription
 from devices.auth import require_device_token
 
 from .ai import answer_question, answer_question_streaming
+from .document_processor import (
+    MAX_FILES_PER_UPLOAD,
+    MAX_TOTAL_SIZE_MB,
+    create_lesson_from_uploads,
+)
 from .models import Lesson, QuestionAnswer, TranscriptChunk
 
 
@@ -317,3 +330,139 @@ def api_question_stream(request: HttpRequest, question_id: int) -> StreamingHttp
     response["Cache-Control"] = "no-cache"
     response["X-Accel-Buffering"] = "no"
     return response
+
+
+# ---------------------------------------------------------------------------
+# POST /api/lessons/upload/ — Document upload (web dashboard only)
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+@require_POST
+@login_required
+def api_lessons_upload(request: HttpRequest) -> JsonResponse:
+    """
+    Upload images/PDFs for OCR transcription and lesson creation.
+    
+    Web dashboard only (session auth required).
+    
+    Request:
+        multipart/form-data with files
+    
+    Response:
+        {
+            "lesson_id": 123,
+            "lesson_name": "Introduction to Photosynthesis",
+            "pages_processed": 15,
+            "processing_time_ms": 12340,
+            "errors": ["file1.pdf: corrupted", ...]
+        }
+    """
+    # Check subscription
+    if not user_has_active_subscription(request.user):
+        return JsonResponse({"error": "Subscription required"}, status=403)
+    
+    # Rate limiting: 10 uploads per hour
+    cache_key = f"upload_rate_limit:{request.user.id}"
+    upload_count = cache.get(cache_key, 0)
+    
+    if upload_count >= 10:
+        return JsonResponse({
+            "error": "Rate limit exceeded. Max 10 uploads per hour."
+        }, status=429)
+    
+    # Get uploaded files
+    files = request.FILES.getlist('files')
+    
+    if not files:
+        return JsonResponse({"error": "No files uploaded"}, status=400)
+    
+    if len(files) > MAX_FILES_PER_UPLOAD:
+        return JsonResponse({
+            "error": f"Too many files. Max {MAX_FILES_PER_UPLOAD} files per upload."
+        }, status=400)
+    
+    # Check total size
+    total_size = sum(f.size for f in files)
+    max_size_bytes = MAX_TOTAL_SIZE_MB * 1024 * 1024
+    
+    if total_size > max_size_bytes:
+        return JsonResponse({
+            "error": f"Total file size too large: {total_size / 1024 / 1024:.1f}MB > {MAX_TOTAL_SIZE_MB}MB"
+        }, status=400)
+    
+    # Process files
+    try:
+        filenames = [f.name for f in files]
+        result = create_lesson_from_uploads(request.user, files, filenames)
+        
+        # Increment rate limit counter (expires in 1 hour)
+        cache.set(cache_key, upload_count + 1, 3600)
+        
+        return JsonResponse({
+            "lesson_id": result['lesson_id'],
+            "lesson_name": result['lesson_name'],
+            "pages_processed": result['pages_processed'],
+            "processing_time_ms": result['total_processing_time_ms'],
+            "errors": result['errors'],
+        })
+    
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    
+    except Exception as e:
+        return JsonResponse({"error": f"Processing failed: {str(e)}"}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/lessons/list/ — List lessons for desktop app selection
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+@require_device_token
+def api_lessons_list(request: HttpRequest) -> JsonResponse:
+    """
+    List lessons for desktop app lesson selection.
+    
+    Query params:
+        ?source_type=recitation|lesson  (optional, default: all)
+    
+    Response:
+        {
+            "lessons": [
+                {
+                    "id": 123,
+                    "title": "Introduction to Photosynthesis",
+                    "source_type": "lesson",
+                    "created_at": "2026-03-07T10:30:00Z",
+                    "page_count": 15
+                }
+            ]
+        }
+    """
+    source_type = request.GET.get('source_type', '').strip()
+    
+    # Build query
+    lessons_query = Lesson.objects.filter(user=request.user)
+    
+    if source_type in [Lesson.SOURCE_RECITATION, Lesson.SOURCE_LESSON]:
+        lessons_query = lessons_query.filter(source_type=source_type)
+    
+    # Order by most recent first
+    lessons = lessons_query.order_by('-created_at')[:100]
+    
+    # Serialize
+    lessons_data = []
+    for lesson in lessons:
+        page_count = lesson.transcript_chunks.count()
+        
+        lessons_data.append({
+            'id': lesson.id,
+            'title': lesson.title,
+            'source_type': lesson.source_type,
+            'created_at': lesson.created_at.isoformat(),
+            'page_count': page_count,
+        })
+    
+    return JsonResponse({'lessons': lessons_data})

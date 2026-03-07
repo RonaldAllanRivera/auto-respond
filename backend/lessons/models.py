@@ -3,12 +3,26 @@ from django.db import models
 
 
 class Lesson(models.Model):
+    SOURCE_RECITATION = 'recitation'
+    SOURCE_LESSON = 'lesson'
+    SOURCE_CHOICES = [
+        (SOURCE_RECITATION, 'Recitation (Live Capture)'),
+        (SOURCE_LESSON, 'Lesson (Document Upload)'),
+    ]
+    
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="lessons")
     title = models.CharField(max_length=255)
     meeting_id = models.CharField(max_length=255, blank=True, default="")
     meeting_date = models.DateField(null=True, blank=True)
+    source_type = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        default=SOURCE_RECITATION,
+        db_index=True
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -18,6 +32,9 @@ class Lesson(models.Model):
                 condition=models.Q(meeting_id__gt=""),
             ),
         ]
+        indexes = [
+            models.Index(fields=['user', 'source_type', '-created_at']),
+        ]
 
 
 class TranscriptChunk(models.Model):
@@ -25,9 +42,11 @@ class TranscriptChunk(models.Model):
     speaker = models.CharField(max_length=255, blank=True, default="")
     text = models.TextField()
     content_hash = models.CharField(max_length=64, blank=True, default="")
+    page_number = models.PositiveIntegerField(null=True, blank=True)
 
     captured_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [

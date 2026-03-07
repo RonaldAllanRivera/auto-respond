@@ -308,6 +308,77 @@ Use Django Admin as the primary CMS:
 - Document the full build process in `desktop/BUILD.md`. ✓
 - GitHub Actions workflow (`.github/workflows/build-desktop.yml`) auto-builds + publishes installer on `v*` tag push. ✓
 
+### Phase 11 — Document Ingestion Pipeline (Backend)
+- **(backend)** Add `source_type` field to `Lesson` model (recitation vs lesson) ✓
+- **(backend)** Add `page_number` field to `TranscriptChunk` for PDF page tracking ✓
+- **(backend)** Install PyMuPDF dependency for PDF processing
+- **(backend)** Create `lessons/document_processor.py` module:
+  - PDF text extraction (fast path for text-based PDFs)
+  - PDF → image → OCR pipeline (for scanned PDFs)
+  - Image OCR processing (JPG, PNG, WEBP, TIFF)
+  - AI lesson naming via OpenAI API (gpt-4o-mini)
+- **(backend)** Create `POST /api/lessons/upload/` endpoint:
+  - Accept multipart/form-data (up to 100 files)
+  - Validate file types and sizes (max 100MB total)
+  - Process files in memory (no disk storage)
+  - Generate AI lesson name from transcribed content
+  - Create Lesson with source_type='lesson'
+  - Return lesson_id, lesson_name, pages_processed
+- **(backend)** Create `GET /api/lessons/list/` endpoint:
+  - Filter by source_type (recitation/lesson)
+  - Return lesson list for desktop app selection
+- **(backend)** Add rate limiting (10 uploads/hour per user)
+- **(backend)** Add subscription enforcement for uploads
+
+### Phase 12 — Dashboard Upload & Editing UI
+- **(dashboard)** Create `/lessons/upload/` page:
+  - File upload form with drag-and-drop
+  - File preview list (name, size, page count)
+  - Progress indicator during processing
+  - Success/error states
+  - Max 100 files, 100MB total validation
+- **(dashboard)** Update `/lessons/` (dashboard home):
+  - Add tabs: "Recitations" | "Lessons" | "All"
+  - Filter lessons by source_type
+  - Show source badges (🎤 Recitation, 📄 Lesson)
+- **(dashboard)** Update `/lessons/<id>/` (lesson detail):
+  - Add inline editing for lesson title
+  - Add inline editing for TranscriptChunk text (OCR corrections)
+  - Show page numbers for Lesson-type content
+  - Track edits with edited_at timestamp
+
+### Phase 13 — Desktop App: Lesson & Pro Modes
+- **(desktop)** Add mode selector UI:
+  - Radio buttons: Recitation, Lesson, Pro
+  - Disable hotkeys in Lesson/Pro modes
+  - Enable hotkeys only in Recitation mode
+- **(desktop)** Lesson Mode features:
+  - Lesson selection dropdown (fetched from `/api/lessons/list/?source_type=lesson`)
+  - Filter by title and date for easy location
+  - Send questions with selected lesson_id
+  - AI answers based on lesson transcript context
+- **(desktop)** Pro Mode features:
+  - AI Persona input field (e.g., "You are a Senior Math Teacher")
+  - AI Description input field (e.g., "Help me answer questions based on: fractions, percentages")
+  - Send persona + description with question API calls
+  - Enhanced AI answering with custom context
+- **(desktop)** Update question detection:
+  - Detect both questions AND statements (e.g., "Explain photosynthesis")
+  - Expand keyword detection: explain, describe, define, compare, etc.
+  - Send all detected prompts to AI (not just WH-questions)
+
+### Phase 14 — Testing & Documentation
+- Test document upload with various PDF types (text, scanned, mixed)
+- Test image upload (JPG, PNG, WEBP, TIFF)
+- Test file size/count limits and rate limiting
+- Test lesson selection in desktop app
+- Test Pro mode persona/description customization
+- Test inline editing (lesson names, OCR text)
+- Verify no files stored on server (disk usage check)
+- Update `README.md` with document ingestion setup
+- Update `TEST.md` with upload/lesson mode verification steps
+- Create `docs/DOCUMENT_INGESTION.md` with detailed guide
+
 ## 11) Testing
 
 This document intentionally stays high-level.
