@@ -21,10 +21,11 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db import IntegrityError
 from django.http import HttpRequest, JsonResponse, StreamingHttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.models import SubscriberProfile
 from billing.entitlements import user_has_active_subscription
@@ -362,13 +363,13 @@ def api_lessons_upload(request: HttpRequest) -> JsonResponse:
     if not user_has_active_subscription(request.user):
         return JsonResponse({"error": "Subscription required"}, status=403)
     
-    # Rate limiting: 10 uploads per hour
+    # Rate limiting: 50 uploads per day
     cache_key = f"upload_rate_limit:{request.user.id}"
     upload_count = cache.get(cache_key, 0)
     
-    if upload_count >= 10:
+    if upload_count >= 50:
         return JsonResponse({
-            "error": "Rate limit exceeded. Max 10 uploads per hour."
+            "error": "Rate limit exceeded. Max 50 uploads per day."
         }, status=429)
     
     # Get uploaded files
@@ -396,8 +397,8 @@ def api_lessons_upload(request: HttpRequest) -> JsonResponse:
         filenames = [f.name for f in files]
         result = create_lesson_from_uploads(request.user, files, filenames)
         
-        # Increment rate limit counter (expires in 1 hour)
-        cache.set(cache_key, upload_count + 1, 3600)
+        # Increment rate limit counter (expires in 24 hours)
+        cache.set(cache_key, upload_count + 1, 86400)
         
         return JsonResponse({
             "lesson_id": result['lesson_id'],
@@ -466,3 +467,94 @@ def api_lessons_list(request: HttpRequest) -> JsonResponse:
         })
     
     return JsonResponse({'lessons': lessons_data})
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/lessons/<id>/ — Delete single lesson
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@login_required
+def api_lesson_delete(request: HttpRequest, lesson_id: int) -> JsonResponse:
+    """
+    Delete a single lesson and all associated data.
+    
+    Deletes:
+    - Lesson record
+    - All TranscriptChunks (cascade)
+    - All QuestionAnswers (cascade)
+    
+    Response:
+        {"success": true, "deleted_id": 123}
+    """
+    lesson = get_object_or_404(Lesson, id=lesson_id, user=request.user)
+    
+    lesson_title = lesson.title
+    lesson.delete()
+    
+    return JsonResponse({
+        'success': True,
+        'deleted_id': lesson_id,
+        'message': f'Lesson "{lesson_title}" deleted successfully'
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/lessons/bulk-delete/ — Delete multiple lessons
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+@require_POST
+@login_required
+def api_lessons_bulk_delete(request: HttpRequest) -> JsonResponse:
+    """
+    Delete multiple lessons in bulk.
+    
+    Request body (JSON):
+        {
+            "lesson_ids": [123, 456, 789]
+        }
+    
+    Response:
+        {
+            "success": true,
+            "deleted_count": 3,
+            "deleted_ids": [123, 456, 789]
+        }
+    """
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
+    lesson_ids = body.get('lesson_ids', [])
+    
+    if not lesson_ids:
+        return JsonResponse({"error": "No lesson IDs provided"}, status=400)
+    
+    if not isinstance(lesson_ids, list):
+        return JsonResponse({"error": "lesson_ids must be an array"}, status=400)
+    
+    # Verify all lessons belong to the user before deleting
+    lessons = Lesson.objects.filter(id__in=lesson_ids, user=request.user)
+    
+    if lessons.count() != len(lesson_ids):
+        return JsonResponse({
+            "error": "Some lessons not found or do not belong to you"
+        }, status=404)
+    
+    deleted_count = lessons.count()
+    deleted_ids = list(lessons.values_list('id', flat=True))
+    
+    # Delete all lessons (cascades to chunks and Q&As)
+    lessons.delete()
+    
+    return JsonResponse({
+        'success': True,
+        'deleted_count': deleted_count,
+        'deleted_ids': deleted_ids,
+        'message': f'{deleted_count} lesson(s) deleted successfully'
+    })

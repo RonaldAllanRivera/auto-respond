@@ -308,44 +308,73 @@ Use Django Admin as the primary CMS:
 - Document the full build process in `desktop/BUILD.md`. ✓
 - GitHub Actions workflow (`.github/workflows/build-desktop.yml`) auto-builds + publishes installer on `v*` tag push. ✓
 
-### Phase 11 — Document Ingestion Pipeline (Backend)
+### Phase 11 — Document Ingestion Pipeline (Backend) ✓ Completed
 - **(backend)** Add `source_type` field to `Lesson` model (recitation vs lesson) ✓
 - **(backend)** Add `page_number` field to `TranscriptChunk` for PDF page tracking ✓
-- **(backend)** Install PyMuPDF dependency for PDF processing
-- **(backend)** Create `lessons/document_processor.py` module:
-  - PDF text extraction (fast path for text-based PDFs)
-  - PDF → image → OCR pipeline (for scanned PDFs)
-  - Image OCR processing (JPG, PNG, WEBP, TIFF)
-  - AI lesson naming via OpenAI API (gpt-4o-mini)
-- **(backend)** Create `POST /api/lessons/upload/` endpoint:
-  - Accept multipart/form-data (up to 100 files)
-  - Validate file types and sizes (max 100MB total)
-  - Process files in memory (no disk storage)
-  - Generate AI lesson name from transcribed content
-  - Create Lesson with source_type='lesson'
-  - Return lesson_id, lesson_name, pages_processed
-- **(backend)** Create `GET /api/lessons/list/` endpoint:
-  - Filter by source_type (recitation/lesson)
-  - Return lesson list for desktop app selection
-- **(backend)** Add rate limiting (10 uploads/hour per user)
-- **(backend)** Add subscription enforcement for uploads
+- **(backend)** Install PyMuPDF dependency for PDF processing ✓
+- **(backend)** Create `lessons/document_processor.py` module: ✓
+  - PDF text extraction (fast path for text-based PDFs) ✓
+  - PDF → image → OCR pipeline (for scanned PDFs) ✓
+  - Image OCR processing (JPG, PNG, WEBP, TIFF) ✓
+  - AI lesson naming via OpenAI API (gpt-4o-mini) ✓
+- **(backend)** Create `POST /api/lessons/upload/` endpoint: ✓
+  - Accept multipart/form-data (up to 100 files) ✓
+  - Validate file types and sizes (max 100MB total) ✓
+  - Process files in memory (no disk storage) ✓
+  - Generate AI lesson name from transcribed content ✓
+  - Create Lesson with source_type='lesson' ✓
+  - Return lesson_id, lesson_name, pages_processed ✓
+- **(backend)** Create `GET /api/lessons/list/` endpoint: ✓
+  - Filter by source_type (recitation/lesson) ✓
+  - Return lesson list for desktop app selection ✓
+- **(backend)** Add rate limiting (50 uploads/day per user) ✓
+- **(backend)** Add subscription enforcement for uploads ✓
+- **(backend)** Install Tesseract OCR in Docker container ✓
 
-### Phase 12 — Dashboard Upload & Editing UI
-- **(dashboard)** Create `/lessons/upload/` page:
-  - File upload form with drag-and-drop
-  - File preview list (name, size, page count)
-  - Progress indicator during processing
-  - Success/error states
-  - Max 100 files, 100MB total validation
-- **(dashboard)** Update `/lessons/` (dashboard home):
-  - Add tabs: "Recitations" | "Lessons" | "All"
-  - Filter lessons by source_type
-  - Show source badges (🎤 Recitation, 📄 Lesson)
-- **(dashboard)** Update `/lessons/<id>/` (lesson detail):
-  - Add inline editing for lesson title
-  - Add inline editing for TranscriptChunk text (OCR corrections)
-  - Show page numbers for Lesson-type content
-  - Track edits with edited_at timestamp
+### Phase 12 — Dashboard Upload & Editing UI ✓ Completed
+- **(dashboard)** Create `/lessons/upload/` page: ✓
+  - File upload form with drag-and-drop ✓
+  - File preview list (name, size, page count) ✓
+  - Progress indicator during processing ✓
+  - Success/error states ✓
+  - Max 100 files, 100MB total validation ✓
+  - Rate limit warnings prominently displayed ✓
+- **(dashboard)** Update `/lessons/` (dashboard home): ✓
+  - Add tabs: "Recitations" | "Lessons" | "All" ✓
+  - Filter lessons by source_type ✓
+  - Show source badges (🎤 Recitation, 📄 Lesson) ✓
+  - Add "Upload Documents" button ✓
+  - Display rate limit info for subscribed users ✓
+- **(dashboard)** Update `/lessons/<id>/` (lesson detail): ✓
+  - Show page numbers for Lesson-type content ✓
+  - Fixed URL namespacing issues ✓
+- **(dashboard)** Inline editing for lesson title (deferred to Phase 14)
+- **(dashboard)** Inline editing for TranscriptChunk text (deferred to Phase 14)
+
+### Phase 12.5 — Delete Functionality ✓ Completed
+- **(backend)** Add `DELETE /api/lessons/<id>/delete/` endpoint: ✓
+  - Delete single lesson with all associated data ✓
+  - Verify lesson ownership before deletion ✓
+  - Cascade delete TranscriptChunks and QuestionAnswers ✓
+- **(backend)** Add `POST /api/lessons/bulk-delete/` endpoint: ✓
+  - Accept array of lesson IDs ✓
+  - Verify all lessons belong to user ✓
+  - Delete multiple lessons in single transaction ✓
+- **(dashboard)** Add bulk delete UI to dashboard: ✓
+  - Checkboxes for each lesson ✓
+  - Bulk actions toolbar (shows when items selected) ✓
+  - "Delete Selected" button with confirmation ✓
+  - Clear selection functionality ✓
+- **(dashboard)** Add single delete to lesson detail page: ✓
+  - "Delete Lesson" button in header ✓
+  - Confirmation dialog before deletion ✓
+  - Redirect to dashboard after successful delete ✓
+- **Best practices:**
+  - Confirmation dialogs prevent accidental deletion
+  - User ownership verification on backend
+  - Cascade deletes maintain data integrity
+  - CSRF protection on all delete endpoints
+  - Clear user feedback on success/error
 
 ### Phase 13 — Desktop App: Lesson & Pro Modes
 - **(desktop)** Add mode selector UI:

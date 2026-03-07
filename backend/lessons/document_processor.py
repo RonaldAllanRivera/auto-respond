@@ -37,7 +37,7 @@ MAX_FILE_SIZE_MB = 10
 MAX_IMAGE_DIMENSION = 4000
 
 # OCR settings
-MIN_TEXT_PER_PAGE = 50  # chars - if less, assume scanned PDF
+MIN_TEXT_PER_PAGE = 10  # chars - if less, try OCR as fallback
 PDF_RENDER_DPI = 300
 
 
@@ -190,15 +190,21 @@ def process_pdf(file: BinaryIO, filename: str) -> dict:
         
         # Open with PyMuPDF
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page_count = len(doc)
         
-        for page_num in range(len(doc)):
+        for page_num in range(page_count):
             page = doc[page_num]
             
             # Try text extraction first (fast path)
-            text = page.get_text()
+            text = page.get_text().strip()
             
-            # If text is sparse, assume scanned PDF and use OCR
-            if len(text.strip()) < MIN_TEXT_PER_PAGE:
+            # Debug: log extracted text length
+            print(f"PDF {filename} page {page_num + 1}: extracted {len(text)} chars via PyMuPDF")
+            
+            # If text is sparse, try OCR as fallback
+            if len(text) < MIN_TEXT_PER_PAGE:
+                print(f"PDF {filename} page {page_num + 1}: text sparse, trying OCR fallback")
+                
                 # Render page to image
                 pix = page.get_pixmap(dpi=PDF_RENDER_DPI)
                 
@@ -207,7 +213,17 @@ def process_pdf(file: BinaryIO, filename: str) -> dict:
                 image = Image.open(io.BytesIO(img_bytes))
                 
                 # Run OCR
-                text = ocr_image(image)
+                ocr_text = ocr_image(image)
+                
+                # Use OCR text only if it's longer than extracted text
+                if len(ocr_text) > len(text):
+                    print(f"PDF {filename} page {page_num + 1}: OCR produced {len(ocr_text)} chars (better)")
+                    text = ocr_text
+                else:
+                    print(f"PDF {filename} page {page_num + 1}: keeping PyMuPDF text ({len(text)} chars)")
+            
+            # Always keep the text even if it's short
+            # Empty pages are OK - they'll be filtered later
             
             pages_data.append({
                 'page_num': page_num + 1,
@@ -224,7 +240,7 @@ def process_pdf(file: BinaryIO, filename: str) -> dict:
         return {
             'text': full_text,
             'pages': pages_data,
-            'page_count': len(doc),
+            'page_count': page_count,
             'processing_time_ms': processing_time_ms,
         }
     
@@ -399,8 +415,17 @@ def create_lesson_from_uploads(user, files: list, filenames: list) -> dict:
     # Combine all text
     full_text = "\n\n".join(part for part in all_text_parts if part)
     
+    # Debug logging
+    print(f"Total files processed: {len(files)}")
+    print(f"Text parts collected: {len(all_text_parts)}")
+    print(f"Full text length: {len(full_text)}")
+    print(f"Full text preview: {full_text[:200]}")
+    
     if not full_text or len(full_text.strip()) < 10:
-        raise ValueError("No text could be extracted from uploaded files")
+        error_msg = f"No text could be extracted from uploaded files. Processed {len(files)} files, got {len(all_text_parts)} text parts, total length: {len(full_text)}"
+        if errors:
+            error_msg += f". Errors: {', '.join(errors)}"
+        raise ValueError(error_msg)
     
     # Generate AI lesson name
     lesson_name = generate_lesson_name(full_text)

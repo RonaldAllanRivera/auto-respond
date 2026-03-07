@@ -54,21 +54,38 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 
 ## Core capabilities
 
+### Authentication & Billing
 - Google OAuth login (django-allauth)
-- Subscriber settings (grade level, max sentences)
+- Stripe monthly subscriptions (Checkout + webhooks + customer portal)
+- Coupon codes (admin-managed, backed by Stripe Promotion Codes or Coupon IDs)
+- Entitlement checks for AI answering when billing is enabled
+
+### Desktop App (Recitation Mode)
 - Device pairing (`POST /api/devices/pair/`) with revocation
 - Screenshot OCR ingestion + server-side dedupe
 - Question detection:
   - WH-start questions (`what`, `where`, `when`, `how`, etc.)
-  - math expressions (including fractions like `1/4 x 1/5`)
+  - Math expressions (including fractions like `1/4 x 1/5`)
   - URL/UI noise filtering (e.g., `docs.google.com/.../edit?` is ignored)
-- AI answers stored and streamed in dashboard (SSE)
 - Desktop paywall behavior: capture blocked while unpaired
-- Stripe monthly subscriptions (Checkout + webhooks + customer portal)
-- Coupon codes (admin-managed, backed by Stripe Promotion Codes or Coupon IDs)
-- Entitlement checks for AI answering when billing is enabled
 - Devices auto-revoke on `/devices/` when subscription is inactive
 - Desktop auto-unpairs if the backend revokes access (including periodic ~30s token re-validation)
+
+### Document Ingestion (Lesson Mode)
+- **Web dashboard upload**: Drag-and-drop interface for images and PDFs
+- **OCR processing**: PyMuPDF for PDFs, Tesseract for images (JPG, PNG, WEBP, TIFF)
+- **AI lesson naming**: OpenAI API generates concise titles from transcribed content
+- **Rate limiting**: 50 uploads per day per user (prevents abuse)
+- **File limits**: Max 100 files per upload, 100MB total, 10MB per file
+- **No server storage**: Files processed in memory only, transcribed text saved to database
+- **Source type filtering**: Dashboard tabs separate Recitations vs Lessons
+- **Cost-effective**: OCR is free (local), AI naming ~$0.0001 per lesson
+
+### AI & Dashboard
+- Subscriber settings (grade level, max sentences)
+- AI answers stored and streamed in dashboard (SSE)
+- Dual content types: Recitations (live capture) and Lessons (uploaded documents)
+- Page number tracking for PDF transcripts
 
 ---
 
@@ -88,6 +105,10 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 8 — Dashboard realtime UX | Planned |
 | 9 — Frontend migration to Next.js | Planned |
 | 10 — Windows desktop installer | Completed |
+| **11 — Document Ingestion Pipeline (Backend)** | **Completed** |
+| **12 — Dashboard Upload & Editing UI** | **Completed** |
+| 13 — Desktop App: Lesson & Pro Modes | In Progress |
+| 14 — Testing & Documentation | Planned |
 
 See `PLAN.md` for detailed phased deliverables.
 
@@ -100,8 +121,11 @@ See `PLAN.md` for detailed phased deliverables.
 - PostgreSQL
 - django-allauth (Google OAuth)
 - WhiteNoise (static files)
-- OpenAI API
+- OpenAI API (gpt-4o-mini for AI naming and answers)
 - Stripe API
+- PyMuPDF (PDF processing)
+- Pillow (image processing)
+- pytesseract + Tesseract OCR (server-side)
 
 ### Desktop
 - Python + tkinter
@@ -112,15 +136,21 @@ See `PLAN.md` for detailed phased deliverables.
 ### Infra / DevEx
 - Docker Compose
 - Render (target deployment)
+- Fly.io (alternative deployment)
 
 ---
 
 ## API contract (desktop ↔ backend)
 
+### Desktop App APIs (device token auth)
 - `POST /api/devices/pair/` — exchange pairing code for device token
 - `POST /api/captions/` — ingest OCR transcript chunks
 - `POST /api/questions/` — submit detected question + context, return AI answer
-- `GET /api/questions/<id>/stream/` — stream answer tokens via SSE (dashboard)
+- `GET /api/lessons/list/` — list lessons for selection (filtered by source_type)
+
+### Dashboard APIs (session auth)
+- `POST /api/lessons/upload/` — upload images/PDFs for OCR and lesson creation
+- `GET /api/questions/<id>/stream/` — stream answer tokens via SSE
 
 ---
 

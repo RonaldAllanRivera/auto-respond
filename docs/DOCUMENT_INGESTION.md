@@ -229,7 +229,7 @@ files: [file1, file2, ...]
 **Errors:**
 - 400: Invalid file type, too many files, or too large
 - 403: Subscription required
-- 429: Rate limit exceeded (10 uploads/hour)
+- 429: Rate limit exceeded (50 uploads/day)
 
 ### List Lessons
 
@@ -269,7 +269,7 @@ Authorization: X-Device-Token
 
 ## Rate Limits
 
-- **Uploads:** 10 per hour per user
+- **Uploads:** 50 per day per user
 - **Files:** Max 100 per upload
 - **Size:** Max 100MB total, 10MB per file
 
@@ -313,7 +313,7 @@ Authorization: X-Device-Token
 
 ### Rate limit exceeded
 
-**Solution:** Wait 1 hour before uploading again (10 uploads/hour limit)
+**Solution:** Wait until the next day before uploading again (50 uploads/day limit)
 
 ### Desktop app doesn't show lessons
 

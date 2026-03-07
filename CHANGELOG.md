@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 11-12 Document Ingestion Pipeline (2026-03-07):
+  - **Backend (Phase 11):**
+    - Added `source_type` field to Lesson model (recitation vs lesson).
+    - Added `page_number` and `edited_at` fields to TranscriptChunk.
+    - PyMuPDF integration for PDF text extraction and OCR.
+    - Image OCR processing (JPG, PNG, WEBP, TIFF) via Tesseract.
+    - AI-powered lesson naming using OpenAI API (gpt-4o-mini).
+    - `POST /api/lessons/upload/` endpoint for document upload (web dashboard only).
+    - `GET /api/lessons/list/` endpoint for lesson selection (desktop app).
+    - Rate limiting: 50 uploads per day per user (Django cache-based).
+    - File validation: max 100 files per upload, 100MB total, 10MB per file.
+    - No server storage: files processed in memory, only transcribed text saved.
+    - Tesseract OCR installed in Docker container for production.
+  - **Dashboard UI (Phase 12):**
+    - `/lessons/upload/` page with drag-and-drop file upload.
+    - Rate limit warnings prominently displayed (50/day, 100 files, 100MB).
+    - File preview list with size display and remove buttons.
+    - Progress indicators and success/error states.
+    - Dashboard tabs for filtering: All / 🎤 Recitations / 📄 Lessons.
+    - Source type badges on lesson cards.
+    - Upload button in dashboard header.
+  - **Documentation:**
+    - Comprehensive `docs/DOCUMENT_INGESTION.md` guide.
+    - Updated PLAN.md with Phase 11-14 roadmap.
+  - **Cost analysis:**
+    - OCR: $0 (local Tesseract, unlimited).
+    - AI naming: ~$0.0001 per lesson (~$0.15/month per active user).
+    - Storage: $0 (no file storage, only transcribed text).
 - Production deployment to Render (2026-02-24 to 2026-02-26):
   - Migrated from Render Postgres to Neon Postgres (free tier, no expiry).
   - Neon setup tutorial added to README.md with connection pooling best practices.

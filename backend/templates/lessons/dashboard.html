@@ -50,7 +50,7 @@
       </div>
       <div class="ml-3">
         <p class="text-sm text-blue-700">
-          <strong>Upload limits:</strong> 10 uploads per hour · Max 100 files per upload · Max 100MB total
+          <strong>Upload limits:</strong> 50 uploads per day · Max 100 files per upload · Max 100MB total
         </p>
       </div>
     </div>
@@ -58,23 +58,41 @@
   {% endif %}
 
   {% if lessons %}
+    <!-- Bulk actions toolbar -->
+    <div id="bulkActionsToolbar" class="hidden bg-slate-100 border border-slate-300 rounded-lg p-4 mb-4">
+      <div class="flex items-center justify-between">
+        <span id="selectedCount" class="text-sm font-medium text-slate-700">0 selected</span>
+        <div class="flex gap-2">
+          <button onclick="clearSelection()" class="px-3 py-1.5 text-sm border border-slate-300 rounded bg-white hover:bg-slate-50">
+            Clear
+          </button>
+          <button onclick="confirmBulkDelete()" class="px-3 py-1.5 text-sm border border-red-300 rounded bg-red-600 text-white hover:bg-red-700">
+            Delete Selected
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="space-y-3">
       {% for l in lessons %}
-        <a href="{% url 'lessons:lesson_detail' l.id %}" class="block rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:shadow hover:border-blue-300 no-underline">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="font-medium text-slate-900">{{ l.title }}</h2>
-              {% if l.meeting_id %}
-                <span class="text-xs text-slate-400">{{ l.meeting_id }}</span>
-              {% endif %}
+        <div class="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:shadow hover:border-blue-300">
+          <input type="checkbox" class="lesson-checkbox mt-1.5 h-4 w-4 rounded border-slate-300" data-lesson-id="{{ l.id }}" onchange="updateBulkActions()">
+          <a href="{% url 'lessons:lesson_detail' l.id %}" class="flex-1 no-underline">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="font-medium text-slate-900">{{ l.title }}</h2>
+                {% if l.meeting_id %}
+                  <span class="text-xs text-slate-400">{{ l.meeting_id }}</span>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-slate-500">{{ l.transcript_chunks.count }} chunks</span>
+                <span class="text-xs text-slate-500">{{ l.qas.count }} Q&amp;A</span>
+                <span class="text-xs text-slate-400">{{ l.created_at|date:"M d, Y · H:i" }}</span>
+              </div>
             </div>
-            <div class="flex items-center gap-3">
-              <span class="text-xs text-slate-500">{{ l.transcript_chunks.count }} chunks</span>
-              <span class="text-xs text-slate-500">{{ l.qas.count }} Q&amp;A</span>
-              <span class="text-xs text-slate-400">{{ l.created_at|date:"M d, Y · H:i" }}</span>
-            </div>
-          </div>
-        </a>
+          </a>
+        </div>
       {% endfor %}
     </div>
   {% else %}
@@ -87,4 +105,58 @@
     </div>
   {% endif %}
 </div>
+
+<script>
+function updateBulkActions() {
+  const checkboxes = document.querySelectorAll('.lesson-checkbox');
+  const checked = Array.from(checkboxes).filter(cb => cb.checked);
+  const toolbar = document.getElementById('bulkActionsToolbar');
+  const countSpan = document.getElementById('selectedCount');
+  
+  if (checked.length > 0) {
+    toolbar.classList.remove('hidden');
+    countSpan.textContent = `${checked.length} selected`;
+  } else {
+    toolbar.classList.add('hidden');
+  }
+}
+
+function clearSelection() {
+  document.querySelectorAll('.lesson-checkbox').forEach(cb => cb.checked = false);
+  updateBulkActions();
+}
+
+function confirmBulkDelete() {
+  const checkboxes = document.querySelectorAll('.lesson-checkbox:checked');
+  const count = checkboxes.length;
+  
+  if (count === 0) return;
+  
+  if (!confirm(`Are you sure you want to delete ${count} lesson(s)? This action cannot be undone.`)) {
+    return;
+  }
+  
+  const lessonIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.lessonId));
+  
+  fetch('{% url "lessons:api_lessons_bulk_delete" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify({ lesson_ids: lessonIds })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to delete lessons'));
+    }
+  })
+  .catch(error => {
+    alert('Error: ' + error.message);
+  });
+}
+</script>
 {% endblock %}
