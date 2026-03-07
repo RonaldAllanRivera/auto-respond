@@ -5,7 +5,7 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <a href="{% url 'index' %}" class="text-sm text-blue-600 hover:text-blue-800">&larr; Back to Lessons</a>
+      <a href="{% url 'lessons:index' %}" class="text-sm text-blue-600 hover:text-blue-800">&larr; Back to Lessons</a>
       <h1 class="mt-1 text-2xl font-bold text-slate-900">{{ lesson.title }}</h1>
       <p class="text-sm text-slate-500">
         {% if lesson.meeting_id %}Meeting: <code class="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{{ lesson.meeting_id }}</code> &middot; {% endif %}

@@ -60,7 +60,7 @@
   {% if lessons %}
     <div class="space-y-3">
       {% for l in lessons %}
-        <a href="{% url 'lesson_detail' l.id %}" class="block rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:shadow hover:border-blue-300 no-underline">
+        <a href="{% url 'lessons:lesson_detail' l.id %}" class="block rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:shadow hover:border-blue-300 no-underline">
           <div class="flex items-center justify-between">
             <div>
               <h2 class="font-medium text-slate-900">{{ l.title }}</h2>
