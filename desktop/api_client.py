@@ -91,23 +91,56 @@ def send_caption(text: str, speaker: str = "", meeting_id: str = "",
 
 
 def send_question(question: str, context: str = "", meeting_id: str = "",
-                  meeting_title: str = "") -> dict:
+                  meeting_title: str = "", lesson_id: int = None,
+                  initial_text: str = "") -> dict:
     """
     Send a detected question to the backend for AI answering.
+
+    Args:
+        question: The question text
+        context: Session context (for recitation mode) or empty (for lesson mode)
+        meeting_id: Daily meeting ID for recitation mode grouping
+        meeting_title: Meeting title (optional)
+        lesson_id: Selected lesson ID for lesson mode (None for recitation mode)
+        initial_text: Initial text for AI title generation
 
     Returns {"question_id": ..., "lesson_id": ..., "answer": ...}.
     """
     url = f"{_base_url()}/api/questions/"
+    payload = {
+        "question": question,
+        "context": context,
+        "meeting_id": meeting_id,
+        "meeting_title": meeting_title,
+        "initial_text": initial_text,
+    }
+    
+    # Add lesson_id only if provided (lesson mode)
+    if lesson_id is not None:
+        payload["lesson_id"] = lesson_id
+    
     resp = requests.post(
         url,
-        json={
-            "question": question,
-            "context": context,
-            "meeting_id": meeting_id,
-            "meeting_title": meeting_title,
-        },
+        json=payload,
         headers=_headers(),
         timeout=30,  # longer timeout for AI answering
+    )
+    if not resp.ok:
+        raise _response_error(resp)
+    return resp.json()
+
+
+def fetch_lessons() -> list[dict]:
+    """
+    Fetch list of lessons with source_type='lesson' from backend.
+    
+    Returns list of {"id": ..., "title": ..., "created_at": ...}.
+    """
+    url = f"{_base_url()}/api/lessons/list/?source_type=lesson"
+    resp = requests.get(
+        url,
+        headers=_headers(),
+        timeout=TIMEOUT,
     )
     if not resp.ok:
         raise _response_error(resp)

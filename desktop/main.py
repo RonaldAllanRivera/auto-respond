@@ -38,7 +38,7 @@ class MeetLessonsApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Meet Lessons")
-        self.root.geometry("520x600")
+        self.root.geometry("520x700")
         self.root.resizable(True, True)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -52,12 +52,24 @@ class MeetLessonsApp:
         self._pending_clipboard_image = None
         self._pending_clipboard_sig = None
         self._clipboard_poll_ms = self._CLIPBOARD_POLL_MS_MIN
+        
+        # Phase 16: Session context management (last 10 captions)
+        self._session_context = deque(maxlen=10)
+        
+        # Phase 16: Mode selection and lesson management
+        self._current_mode = config.get("capture_mode", "recitation")  # "recitation" or "lesson"
+        self._selected_lesson_id = None
+        self._selected_lesson_title = None
+        self._lessons_list = []
 
         self._build_ui()
         self._refresh_pairing_status()
         self._start_pairing_revalidation()
         self._start_hotkey_listener()
         self._start_clipboard_watcher()
+        
+        # Phase 16: Initialize mode UI state
+        self._on_mode_changed()
 
     # ------------------------------------------------------------------ UI
     # ------------------------------------------------------------------ UI
@@ -86,6 +98,47 @@ class MeetLessonsApp:
 
         self.unpair_btn = ttk.Button(pair_input_frame, text="Unpair", command=self._unpair_device)
         self.unpair_btn.pack(side=tk.LEFT)
+
+        # ---- Mode Selection (Phase 16) ----
+        mode_frame = ttk.LabelFrame(main, text="Mode Selection", padding=8)
+        mode_frame.pack(fill=tk.X, pady=(0, 8))
+
+        self.mode_var = tk.StringVar(value=self._current_mode)
+        ttk.Radiobutton(
+            mode_frame,
+            text="Recitation Mode (Live Capture)",
+            variable=self.mode_var,
+            value="recitation",
+            command=self._on_mode_changed
+        ).pack(anchor=tk.W)
+        ttk.Radiobutton(
+            mode_frame,
+            text="Lesson Mode (Study Documents)",
+            variable=self.mode_var,
+            value="lesson",
+            command=self._on_mode_changed
+        ).pack(anchor=tk.W, pady=(4, 0))
+
+        # Lesson selection (only visible in Lesson mode)
+        self.lesson_select_frame = ttk.Frame(mode_frame)
+        self.lesson_select_frame.pack(fill=tk.X, pady=(8, 0))
+
+        ttk.Label(self.lesson_select_frame, text="Select Lesson:").pack(anchor=tk.W)
+        
+        lesson_combo_frame = ttk.Frame(self.lesson_select_frame)
+        lesson_combo_frame.pack(fill=tk.X, pady=(4, 0))
+        
+        self.lesson_combo = ttk.Combobox(lesson_combo_frame, state="readonly", width=40)
+        self.lesson_combo.pack(side=tk.LEFT, padx=(0, 6))
+        self.lesson_combo.bind("<<ComboboxSelected>>", self._on_lesson_selected)
+        
+        ttk.Button(lesson_combo_frame, text="Refresh", command=self._refresh_lessons).pack(side=tk.LEFT)
+        
+        # Session context info
+        self.session_info_var = tk.StringVar(value="Session: 0 captures")
+        ttk.Label(mode_frame, textvariable=self.session_info_var, font=("Consolas", 8)).pack(anchor=tk.W, pady=(8, 0))
+        
+        ttk.Button(mode_frame, text="Clear Session Context", command=self._clear_session_context).pack(anchor=tk.W, pady=(4, 0))
 
         # ---- Capture Status ----
         capture_frame = ttk.LabelFrame(main, text="Screenshot Capture", padding=8)
@@ -272,6 +325,84 @@ class MeetLessonsApp:
     def _finish_pairing_revalidation(self):
         self._pairing_revalidate_running = False
         self._schedule_pairing_revalidation()
+
+    # ------------------------------------------------------------------ Mode Selection & Lessons (Phase 16)
+
+    def _on_mode_changed(self):
+        """Handle mode selection change."""
+        self._current_mode = self.mode_var.get()
+        config.set_key("capture_mode", self._current_mode)
+        
+        # Show/hide lesson selection based on mode
+        if self._current_mode == "lesson":
+            self.lesson_select_frame.pack(fill=tk.X, pady=(8, 0))
+            self._refresh_lessons()
+            self._log(f"Switched to Lesson Mode - select a lesson to study")
+        else:
+            self.lesson_select_frame.pack_forget()
+            self._selected_lesson_id = None
+            self._selected_lesson_title = None
+            self._log(f"Switched to Recitation Mode - live capture enabled")
+        
+        self._update_session_info()
+
+    def _refresh_lessons(self):
+        """Fetch lessons from backend API."""
+        if not config.is_paired():
+            self._log("Not paired - pair device first to load lessons")
+            return
+        
+        self._log("Fetching lessons from backend...")
+        try:
+            lessons = api_client.fetch_lessons()
+            self._lessons_list = lessons
+            
+            if not lessons:
+                self.lesson_combo['values'] = ["(Upload lessons via web dashboard)"]
+                self.lesson_combo.current(0)
+                self.lesson_combo.configure(state="disabled")
+                self._log("No lessons found - upload documents via web dashboard")
+            else:
+                lesson_titles = [f"{l['title']} (ID: {l['id']})" for l in lessons]
+                self.lesson_combo['values'] = lesson_titles
+                self.lesson_combo.configure(state="readonly")
+                self._log(f"Loaded {len(lessons)} lesson(s)")
+                
+                # Auto-select first lesson if none selected
+                if self._selected_lesson_id is None and lessons:
+                    self.lesson_combo.current(0)
+                    self._on_lesson_selected(None)
+        except Exception as e:
+            self._log(f"Failed to fetch lessons: {e}")
+            self.lesson_combo['values'] = ["(Error loading lessons)"]
+            self.lesson_combo.current(0)
+            self.lesson_combo.configure(state="disabled")
+
+    def _on_lesson_selected(self, event):
+        """Handle lesson selection from dropdown."""
+        if not self._lessons_list:
+            return
+        
+        idx = self.lesson_combo.current()
+        if idx >= 0 and idx < len(self._lessons_list):
+            lesson = self._lessons_list[idx]
+            self._selected_lesson_id = lesson['id']
+            self._selected_lesson_title = lesson['title']
+            self._log(f"Selected lesson: {self._selected_lesson_title}")
+
+    def _clear_session_context(self):
+        """Clear session context (last 10 captions)."""
+        self._session_context.clear()
+        self._update_session_info()
+        self._log("Session context cleared")
+
+    def _update_session_info(self):
+        """Update session info display."""
+        context_count = len(self._session_context)
+        if self._current_mode == "recitation":
+            self.session_info_var.set(f"Session: {context_count} capture(s) in context")
+        else:
+            self.session_info_var.set(f"Lesson Mode: Context from selected lesson")
 
     # ------------------------------------------------------------------ Hotkey
 
@@ -485,6 +616,10 @@ class MeetLessonsApp:
             preview = payload_text[:100].replace("\n", " ")
             self.root.after(0, lambda: self._log(f"OCR done ({ocr_ms}ms): {preview}..."))
 
+            # Phase 16: Add to session context
+            self._session_context.append(payload_text)
+            self.root.after(0, self._update_session_info)
+
             try:
                 questions = detector.detect_questions(payload_text)
                 if not questions:
@@ -497,28 +632,66 @@ class MeetLessonsApp:
                     f"Found {len(questions)} question(s): {questions[0][:80]}..."
                 ))
 
-                # Group all captures from the same day into one lesson
-                from datetime import datetime
-                daily_meeting_id = f"screen-capture-{datetime.now().strftime('%Y-%m-%d')}"
-                
-                result = api_client.send_caption(text=payload_text, speaker="", meeting_id=daily_meeting_id, meeting_title="")
-                self.root.after(0, lambda: self._log(
-                    f"Caption sent → lesson {result.get('lesson_id')}, "
-                    f"chunk {result.get('chunk_id')}, new={result.get('created')}"
-                ))
-
-                for q in questions:
-                    try:
-                        result = api_client.send_question(
-                            question=q, context=payload_text, meeting_id=daily_meeting_id, meeting_title=""
-                        )
-                        self.root.after(0, lambda q=q, r=result: self._log(
-                            f"Question sent → ID {r.get('question_id')}: {q[:60]}"
+                # Phase 16: Mode-specific behavior
+                if self._current_mode == "lesson":
+                    # Lesson mode: Require lesson selection
+                    if self._selected_lesson_id is None:
+                        self.root.after(0, lambda: self._log(
+                            "Lesson mode: Please select a lesson first"
                         ))
-                    except Exception as e:
-                        if self._handle_backend_auth_error(e):
-                            return
-                        self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
+                        return
+                    
+                    # Send questions with selected lesson_id
+                    for q in questions:
+                        try:
+                            result = api_client.send_question(
+                                question=q,
+                                context="",  # Backend uses lesson transcript
+                                lesson_id=self._selected_lesson_id,
+                                initial_text=q
+                            )
+                            self.root.after(0, lambda q=q, r=result: self._log(
+                                f"Question sent (Lesson Mode) → ID {r.get('question_id')}: {q[:60]}"
+                            ))
+                        except Exception as e:
+                            if self._handle_backend_auth_error(e):
+                                return
+                            self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
+                else:
+                    # Recitation mode: Use session context and daily grouping
+                    from datetime import datetime
+                    daily_meeting_id = f"screen-capture-{datetime.now().strftime('%Y-%m-%d')}"
+                    
+                    # Build session context string
+                    session_context_str = "\n".join(self._session_context)
+                    
+                    result = api_client.send_caption(
+                        text=payload_text,
+                        speaker="",
+                        meeting_id=daily_meeting_id,
+                        meeting_title=""
+                    )
+                    self.root.after(0, lambda: self._log(
+                        f"Caption sent → lesson {result.get('lesson_id')}, "
+                        f"chunk {result.get('chunk_id')}, new={result.get('created')}"
+                    ))
+
+                    for q in questions:
+                        try:
+                            result = api_client.send_question(
+                                question=q,
+                                context=session_context_str,  # Last 10 captions
+                                meeting_id=daily_meeting_id,
+                                meeting_title="",
+                                initial_text=q
+                            )
+                            self.root.after(0, lambda q=q, r=result: self._log(
+                                f"Question sent (Recitation Mode) → ID {r.get('question_id')}: {q[:60]}"
+                            ))
+                        except Exception as e:
+                            if self._handle_backend_auth_error(e):
+                                return
+                            self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
             except Exception as e:
                 if self._handle_backend_auth_error(e):
                     return

@@ -253,10 +253,13 @@ def api_questions(request: HttpRequest) -> JsonResponse:
                     chunk_texts.append(chunk.text)
             full_context = "\n".join(chunk_texts)
         else:
-            # Recitation mode: Use recent captions as context
-            recent_chunks = lesson.transcript_chunks.order_by("-created_at")[:10]
-            chunk_texts = [c.text for c in reversed(recent_chunks)]
-            full_context = "\n".join(chunk_texts)
+            # Recitation mode: Use provided context (session context from desktop app)
+            # If no context provided, fall back to recent captions from database
+            if not context:
+                recent_chunks = lesson.transcript_chunks.order_by("-created_at")[:10]
+                chunk_texts = [c.text for c in reversed(recent_chunks)]
+                full_context = "\n".join(chunk_texts)
+            # else: use the provided context (already set above)
 
     # Use persona/description from request, fallback to user settings
     final_persona = persona or profile.ai_persona
