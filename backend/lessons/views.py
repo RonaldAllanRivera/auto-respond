@@ -1,7 +1,9 @@
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 
+from accounts.models import SubscriberProfile
 from billing.entitlements import billing_is_configured, user_has_active_subscription
 
 from .models import Lesson
@@ -68,4 +70,30 @@ def lesson_detail(request: HttpRequest, lesson_id: int) -> HttpResponse:
         "lesson": lesson,
         "chunks": chunks,
         "qas": qas,
+    })
+
+
+@login_required
+def settings(request: HttpRequest) -> HttpResponse:
+    """User settings page for AI persona and description customization."""
+    profile = SubscriberProfile.get_for_user(request.user)
+    
+    if request.method == "POST":
+        # Update settings
+        profile.grade_level = int(request.POST.get("grade_level", 3))
+        profile.max_sentences = int(request.POST.get("max_sentences", 2))
+        profile.ai_persona = request.POST.get("ai_persona", "").strip()
+        profile.ai_description = request.POST.get("ai_description", "").strip()
+        profile.save()
+        
+        messages.success(request, "Settings saved successfully!")
+        return redirect("lessons:settings")
+    
+    billing_enabled = billing_is_configured()
+    subscribed = user_has_active_subscription(request.user)
+    
+    return render(request, "lessons/settings.html", {
+        "profile": profile,
+        "billing_enabled": billing_enabled,
+        "subscribed": subscribed,
     })

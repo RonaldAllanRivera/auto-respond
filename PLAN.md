@@ -351,7 +351,7 @@ Use Django Admin as the primary CMS:
 - **(dashboard)** Inline editing for lesson title (deferred to Phase 14)
 - **(dashboard)** Inline editing for TranscriptChunk text (deferred to Phase 14)
 
-### Phase 12.5 — Delete Functionality ✓ Completed
+### Phase 12.5 — Delete Functionality & Transcript Formatting ✓ Completed
 - **(backend)** Add `DELETE /api/lessons/<id>/delete/` endpoint: ✓
   - Delete single lesson with all associated data ✓
   - Verify lesson ownership before deletion ✓
@@ -369,44 +369,93 @@ Use Django Admin as the primary CMS:
   - "Delete Lesson" button in header ✓
   - Confirmation dialog before deletion ✓
   - Redirect to dashboard after successful delete ✓
+- **(dashboard)** Improve transcript formatting: ✓
+  - Preserve line breaks and paragraphs from PDFs/images ✓
+  - Added `whitespace-pre-wrap` CSS and `linebreaks` filter ✓
+  - Display page numbers for document-sourced lessons ✓
+- **(backend)** PDF extraction bug fixes: ✓
+  - Fixed page_count access after document close ✓
+  - Lowered MIN_TEXT_PER_PAGE from 50 to 10 chars ✓
+  - Improved OCR fallback to preserve extracted text ✓
+  - Added detailed debug logging ✓
+- **(desktop)** Question detection improvements: ✓
+  - Added imperative keyword detection (explain, describe, define, etc.) ✓
+  - Now detects command-style prompts like "Explain Python Programming Language" ✓
+  - Expanded from 9 to 23+ trigger keywords ✓
+  - All detected prompts sent to AI (not just WH-questions) ✓
 - **Best practices:**
   - Confirmation dialogs prevent accidental deletion
   - User ownership verification on backend
   - Cascade deletes maintain data integrity
   - CSRF protection on all delete endpoints
   - Clear user feedback on success/error
+  - Preserve original document formatting
 
-### Phase 13 — Desktop App: Lesson & Pro Modes
-- **(desktop)** Add mode selector UI:
-  - Radio buttons: Recitation, Lesson, Pro
-  - Disable hotkeys in Lesson/Pro modes
-  - Enable hotkeys only in Recitation mode
-- **(desktop)** Lesson Mode features:
+### Phase 13 — Simplified AI Persona & Send-All Architecture
+**Goal:** Remove Pro mode complexity. Add global persona/description settings that apply to both Recitation and Lesson modes. Send ALL captured text to backend (no keyword filtering).
+
+- **(backend)** Add persona and description to UserSettings:
+  - `ai_persona` field (TextField, optional, default: "You are a helpful tutor")
+  - `ai_description` field (TextField, optional, default: "")
+  - Example: persona="You are a grade 3 student", description="Help me impress my teacher and get high grades"
+- **(backend)** Update `POST /api/questions/` API:
+  - Accept `persona` and `description` in request body
+  - Construct AI system prompt using persona + description + grade level
+  - Format: "System: {persona}. {description}. Answer in {max_sentences} sentences for grade {grade_level}."
+- **(backend)** Update AI prompt construction:
+  - Use persona/description from request OR user settings (request overrides)
+  - Apply to both Recitation and Lesson mode questions
+  - Maintain existing context handling (previous captions or lesson transcript)
+- **(desktop)** Remove keyword filtering in detector.py:
+  - Send ALL non-noise text to backend (not just questions)
+  - Keep `looks_like_noise()` filter for URLs and UI trash
+  - Let backend AI decide what to answer
+  - Rationale: More flexible, handles "photosynthesis" → AI answers based on persona
+- **(desktop)** Simplify mode selector:
+  - Remove "Pro Mode" option
+  - Keep only: Recitation Mode, Lesson Mode
+  - Disable hotkeys in Lesson mode (same as before)
+- **(desktop)** Add Settings fields:
+  - AI Persona (text input, optional)
+  - AI Description (text input, optional)
+  - Applies globally to both Recitation and Lesson modes
+  - Sent with every API call to `/api/questions/`
+- **(desktop)** Update Lesson Mode:
   - Lesson selection dropdown (fetched from `/api/lessons/list/?source_type=lesson`)
-  - Filter by title and date for easy location
-  - Send questions with selected lesson_id
-  - AI answers based on lesson transcript context
-- **(desktop)** Pro Mode features:
-  - AI Persona input field (e.g., "You are a Senior Math Teacher")
-  - AI Description input field (e.g., "Help me answer questions based on: fractions, percentages")
-  - Send persona + description with question API calls
-  - Enhanced AI answering with custom context
-- **(desktop)** Update question detection:
-  - Detect both questions AND statements (e.g., "Explain photosynthesis")
-  - Expand keyword detection: explain, describe, define, compare, etc.
-  - Send all detected prompts to AI (not just WH-questions)
+  - Send questions with selected lesson_id + persona + description
+  - AI answers based on lesson transcript + persona context
+- **(desktop)** Update API client:
+  - Include persona and description in all `/api/questions/` calls
+  - Read from Settings, send with every request
+  - Backend uses these to customize AI responses
 
-### Phase 14 — Testing & Documentation
-- Test document upload with various PDF types (text, scanned, mixed)
-- Test image upload (JPG, PNG, WEBP, TIFF)
-- Test file size/count limits and rate limiting
-- Test lesson selection in desktop app
-- Test Pro mode persona/description customization
-- Test inline editing (lesson names, OCR text)
-- Verify no files stored on server (disk usage check)
-- Update `README.md` with document ingestion setup
-- Update `TEST.md` with upload/lesson mode verification steps
-- Create `docs/DOCUMENT_INGESTION.md` with detailed guide
+### Phase 14 — Desktop App Stability & Auto-Capture ✓ Completed
+- **(desktop)** Fixed UI freezing/shaking: ✓
+  - Replaced blocking `time.sleep()` with non-blocking `tkinter.after()` ✓
+  - Clipboard polling uses 200ms intervals without blocking main thread ✓
+  - Print Screen capture waits up to 8 seconds for Ctrl+C without UI freeze ✓
+- **(desktop)** Auto-capture improvements: ✓
+  - Re-enabled clipboard watcher for automatic capture on Ctrl+C ✓
+  - Ignores pre-existing clipboard images on startup (only captures NEW images) ✓
+  - Daily lesson grouping: all captures from same day grouped into one lesson ✓
+  - AI-generated lesson titles from first captured text ✓
+- **(desktop)** Long-running stability (4+ hour sessions): ✓
+  - Activity log auto-trims to 500 lines to prevent memory growth ✓
+  - Clipboard signature cache bounded to 200 entries ✓
+  - Memory-efficient: ~60MB for 4-hour sessions (~2.5MB/hour growth) ✓
+  - All threads are daemon threads for proper cleanup ✓
+- **(dashboard)** Bulk selection improvements: ✓
+  - Added "Select All" checkbox for bulk lesson selection ✓
+  - Bulk delete now supports selecting all lessons at once ✓
+- **(testing)** Comprehensive test suite: ✓
+  - Created `desktop/test_desktop.py` with 19 tests ✓
+  - Tests for clipboard capture, UI responsiveness, OCR, question detection ✓
+  - Performance benchmarks: capture < 1s, processing < 5s ✓
+  - Added `pytest` and `pytest-mock` to requirements ✓
+- **(documentation)** Stability guides: ✓
+  - `desktop/README_TESTS.md` - Test suite documentation ✓
+  - `desktop/LONG_RUNNING.md` - 4-hour session stability guide ✓
+  - Memory benchmarks and monitoring commands ✓
 
 ## 11) Testing
 

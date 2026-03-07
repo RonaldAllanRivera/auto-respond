@@ -4,12 +4,21 @@
 <div class="space-y-6">
   <div class="flex items-center justify-between">
     <h1 class="text-2xl font-bold text-slate-900">Your Lessons</h1>
-    <a href="{% url 'lessons:upload_page' %}" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-      <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-      </svg>
-      Upload Documents
-    </a>
+    <div class="flex gap-2">
+      <a href="{% url 'lessons:settings' %}" class="inline-flex items-center justify-center rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Settings
+      </a>
+      <a href="{% url 'lessons:upload_page' %}" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        </svg>
+        Upload Documents
+      </a>
+    </div>
   </div>
 
   {% if billing_enabled and not subscribed %}
@@ -58,6 +67,12 @@
   {% endif %}
 
   {% if lessons %}
+    <!-- Select All checkbox -->
+    <div class="flex items-center gap-2 mb-3 px-2">
+      <input type="checkbox" id="selectAllCheckbox" class="h-4 w-4 rounded border-slate-300" onchange="toggleSelectAll()">
+      <label for="selectAllCheckbox" class="text-sm font-medium text-slate-700 cursor-pointer">Select All</label>
+    </div>
+
     <!-- Bulk actions toolbar -->
     <div id="bulkActionsToolbar" class="hidden bg-slate-100 border border-slate-300 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between">
@@ -121,8 +136,20 @@ function updateBulkActions() {
   }
 }
 
+function toggleSelectAll() {
+  const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+  const checkboxes = document.querySelectorAll('.lesson-checkbox');
+  
+  checkboxes.forEach(cb => {
+    cb.checked = selectAllCheckbox.checked;
+  });
+  
+  updateBulkActions();
+}
+
 function clearSelection() {
   document.querySelectorAll('.lesson-checkbox').forEach(cb => cb.checked = false);
+  document.getElementById('selectAllCheckbox').checked = false;
   updateBulkActions();
 }
 

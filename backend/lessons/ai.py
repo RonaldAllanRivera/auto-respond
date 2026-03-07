@@ -22,12 +22,23 @@ def _get_client() -> OpenAI:
     )
 
 
-def _build_prompt(question: str, context: str, grade_level: int, max_sentences: int) -> list[dict]:
+def _build_prompt(question: str, context: str, grade_level: int, max_sentences: int,
+                  persona: str = "", description: str = "") -> list[dict]:
     """Build the chat messages for the OpenAI API call."""
-    system_msg = (
-        f"You are a helpful teaching assistant for a Grade {grade_level} student. "
+    # Use custom persona or default
+    if persona:
+        system_msg = f"{persona}. "
+    else:
+        system_msg = f"You are a helpful teaching assistant for a Grade {grade_level} student. "
+    
+    # Add description if provided
+    if description:
+        system_msg += f"{description}. "
+    
+    # Add standard instructions
+    system_msg += (
         f"Answer the question clearly and concisely in {max_sentences} sentence(s) or fewer. "
-        f"Use simple language appropriate for the student's grade level. "
+        f"Use simple language appropriate for a Grade {grade_level} student. "
         f"If the question involves a calculation, show the steps briefly."
     )
 
@@ -45,9 +56,18 @@ def _build_prompt(question: str, context: str, grade_level: int, max_sentences: 
 
 
 def answer_question(question: str, context: str = "",
-                    grade_level: int = 3, max_sentences: int = 2) -> dict:
+                    grade_level: int = 3, max_sentences: int = 2,
+                    persona: str = "", description: str = "") -> dict:
     """
     Call OpenAI to answer a question synchronously.
+
+    Args:
+        question: The question or prompt to answer
+        context: Lesson context or previous captions
+        grade_level: Student grade level (1-12)
+        max_sentences: Max sentences in answer
+        persona: AI persona/role (e.g., "You are a grade 3 student")
+        description: Additional AI instructions (e.g., "Help me impress my teacher")
 
     Returns:
         {
@@ -64,7 +84,7 @@ def answer_question(question: str, context: str = "",
         }
 
     client = _get_client()
-    messages = _build_prompt(question, context, grade_level, max_sentences)
+    messages = _build_prompt(question, context, grade_level, max_sentences, persona, description)
     model = settings.OPENAI_MODEL
 
     start = time.time()
@@ -94,7 +114,8 @@ def answer_question(question: str, context: str = "",
 
 
 def answer_question_streaming(question: str, context: str = "",
-                              grade_level: int = 3, max_sentences: int = 2):
+                              grade_level: int = 3, max_sentences: int = 2,
+                              persona: str = "", description: str = ""):
     """
     Call OpenAI to answer a question with streaming.
 
@@ -105,7 +126,7 @@ def answer_question_streaming(question: str, context: str = "",
         return
 
     client = _get_client()
-    messages = _build_prompt(question, context, grade_level, max_sentences)
+    messages = _build_prompt(question, context, grade_level, max_sentences, persona, description)
     model = settings.OPENAI_MODEL
 
     try:

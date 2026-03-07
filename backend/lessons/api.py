@@ -51,27 +51,35 @@ def _hash_caption(speaker: str, text: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _get_or_create_lesson(user, meeting_id: str, meeting_title: str, meeting_date: date | None = None) -> Lesson:
+def _get_or_create_lesson(user, meeting_id: str, meeting_title: str, meeting_date: date | None = None, first_text: str = "") -> Lesson:
     """
     Get or create a lesson for the given meeting.
 
     If meeting_id is provided, dedup by (user, meeting_id, meeting_date).
     If meeting_id is empty, always create a new lesson.
+    
+    If meeting_title is empty and first_text is provided, generate a title from the text.
     """
+    from .document_processor import generate_lesson_name
+    
     today = meeting_date or timezone.now().date()
+    
+    # Generate title from first_text if no meeting_title provided
+    if not meeting_title and first_text:
+        meeting_title = generate_lesson_name(first_text[:500])  # Use first 500 chars for title generation
 
     if meeting_id:
         lesson, _ = Lesson.objects.get_or_create(
             user=user,
             meeting_id=meeting_id,
             meeting_date=today,
-            defaults={"title": meeting_title or f"Meeting {today.isoformat()}"},
+            defaults={"title": meeting_title or f"Capture {today.isoformat()}"},
         )
         return lesson
 
     return Lesson.objects.create(
         user=user,
-        title=meeting_title or f"Meeting {today.isoformat()}",
+        title=meeting_title or f"Capture {today.isoformat()}",
         meeting_date=today,
     )
 
@@ -129,7 +137,7 @@ def api_captions(request: HttpRequest) -> JsonResponse:
         except Lesson.DoesNotExist:
             return JsonResponse({"error": "Lesson not found"}, status=404)
     else:
-        lesson = _get_or_create_lesson(request.user, meeting_id, meeting_title)
+        lesson = _get_or_create_lesson(request.user, meeting_id, meeting_title, first_text=text)
 
     # Server-side dedupe via content_hash
     content_hash = _hash_caption(speaker, text)
@@ -175,7 +183,9 @@ def api_questions(request: HttpRequest) -> JsonResponse:
             "context": "The teacher was explaining how plants make food...",
             "meeting_id": "abc-defg-hij",
             "meeting_title": "Biology Class",
-            "lesson_id": 123               // optional, overrides auto-create
+            "lesson_id": 123,              // optional, overrides auto-create
+            "persona": "You are a grade 3 student",  // optional, overrides user settings
+            "description": "Help me impress my teacher"  // optional, overrides user settings
         }
 
     Response:
@@ -194,6 +204,10 @@ def api_questions(request: HttpRequest) -> JsonResponse:
     meeting_id = body.get("meeting_id", "").strip()
     meeting_title = body.get("meeting_title", "").strip()
     lesson_id = body.get("lesson_id")
+    
+    # AI customization (optional, overrides user settings)
+    persona = body.get("persona", "").strip()
+    description = body.get("description", "").strip()
 
     # Resolve lesson
     if lesson_id:
@@ -202,9 +216,9 @@ def api_questions(request: HttpRequest) -> JsonResponse:
         except Lesson.DoesNotExist:
             return JsonResponse({"error": "Lesson not found"}, status=404)
     elif meeting_id:
-        lesson = _get_or_create_lesson(request.user, meeting_id, meeting_title)
+        lesson = _get_or_create_lesson(request.user, meeting_id, meeting_title, first_text=question_text)
     else:
-        lesson = _get_or_create_lesson(request.user, "", meeting_title)
+        lesson = _get_or_create_lesson(request.user, "", meeting_title, first_text=question_text)
 
     # Store the context as a transcript chunk if provided
     if context and lesson:
@@ -232,12 +246,18 @@ def api_questions(request: HttpRequest) -> JsonResponse:
         chunk_texts = [c.text for c in reversed(recent_chunks)]
         full_context = "\n".join(chunk_texts)
 
+    # Use persona/description from request, fallback to user settings
+    final_persona = persona or profile.ai_persona
+    final_description = description or profile.ai_description
+
     # Call OpenAI synchronously
     ai_result = answer_question(
         question=question_text,
         context=full_context,
         grade_level=profile.grade_level,
         max_sentences=profile.max_sentences,
+        persona=final_persona,
+        description=final_description,
     )
 
     # Store the question + answer
@@ -313,6 +333,8 @@ def api_question_stream(request: HttpRequest, question_id: int) -> StreamingHttp
             context=full_context,
             grade_level=profile.grade_level,
             max_sentences=profile.max_sentences,
+            persona=profile.ai_persona,
+            description=profile.ai_description,
         ):
             full_answer.append(token)
             yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"

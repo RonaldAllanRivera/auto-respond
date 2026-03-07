@@ -36,6 +36,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - OCR: $0 (local Tesseract, unlimited).
     - AI naming: ~$0.0001 per lesson (~$0.15/month per active user).
     - Storage: $0 (no file storage, only transcribed text).
+- Phase 12.5 Delete Functionality & Transcript Formatting (2026-03-07):
+  - **Delete Endpoints:**
+    - `DELETE /api/lessons/<id>/delete/` for single lesson deletion.
+    - `POST /api/lessons/bulk-delete/` for bulk deletion.
+    - User ownership verification and cascade deletes (chunks, Q&As).
+  - **Dashboard UI:**
+    - Bulk delete: checkboxes, selection toolbar, "Delete Selected" button.
+    - Single delete: "Delete Lesson" button on detail page.
+    - Confirmation dialogs prevent accidental deletion.
+  - **Transcript Formatting:**
+    - Preserve line breaks and paragraphs from PDFs/images.
+    - Added `whitespace-pre-wrap` CSS and `linebreaks` filter.
+    - Display page numbers for document-sourced lessons.
+  - **Bug Fixes:**
+    - Fixed PyMuPDF page_count access after document close.
+    - Lowered MIN_TEXT_PER_PAGE from 50 to 10 chars.
+    - Improved OCR fallback to preserve extracted text.
+    - Better error messages with detailed debug logging.
+  - **Desktop Question Detection:**
+    - Added imperative keyword detection (explain, describe, define, compare, etc.).
+    - Now detects command-style prompts like "Explain Python Programming Language".
+    - Expanded from 9 to 23+ trigger keywords.
+- Phase 14 Desktop App Stability & Auto-Capture (2026-03-07):
+  - **UI Responsiveness:**
+    - Fixed UI freezing/shaking by replacing blocking `time.sleep()` with non-blocking `tkinter.after()`.
+    - Clipboard polling now uses 200ms intervals without blocking main thread.
+    - Print Screen capture waits up to 8 seconds for Ctrl+C without UI freeze.
+  - **Auto-Capture:**
+    - Re-enabled clipboard watcher for automatic capture on Ctrl+C.
+    - Ignores pre-existing clipboard images on startup (only captures NEW images).
+    - Daily lesson grouping: all captures from same day grouped into one lesson.
+    - AI-generated lesson titles from first captured text (no more "Screen Capture").
+  - **Long-Running Stability:**
+    - Activity log auto-trims to 500 lines to prevent memory growth.
+    - Clipboard signature cache bounded to 200 entries (deque with maxlen).
+    - Memory-efficient: ~60MB for 4-hour sessions (~2.5MB/hour growth).
+    - All threads are daemon threads for proper cleanup.
+  - **Dashboard UI:**
+    - Added "Select All" checkbox for bulk lesson selection.
+    - Bulk delete now supports selecting all lessons at once.
+  - **Testing:**
+    - Created comprehensive test suite (`test_desktop.py`) with 19 tests.
+    - Tests for clipboard capture, UI responsiveness, OCR, question detection.
+    - Performance benchmarks: capture < 1s, processing < 5s.
+    - Added `pytest` and `pytest-mock` to requirements.
+  - **Documentation:**
+    - `desktop/README_TESTS.md` - Test suite guide.
+    - `desktop/LONG_RUNNING.md` - 4-hour session stability guide.
+    - Memory benchmarks and monitoring commands.
+    - Fixes issue where desktop app ignored non-interrogative statements.
+- Phase 13 Simplified AI Persona & Send-All Architecture (2026-03-07):
+  - **Backend AI Customization:**
+    - Added `ai_persona` and `ai_description` fields to SubscriberProfile model.
+    - AI prompt construction now uses persona + description + grade level.
+    - Example: persona="You are a grade 3 student", description="Help me impress my teacher".
+  - **API Updates:**
+    - `POST /api/questions/` accepts optional `persona` and `description` parameters.
+    - Falls back to user settings if not provided in request.
+    - Both sync and streaming endpoints support persona/description.
+  - **Desktop App Simplification:**
+    - Removed keyword filtering - sends ALL non-noise text to backend.
+    - Desktop app no longer decides what is a "question".
+    - Backend AI decides what to answer based on persona/description.
+    - Handles single words ("photosynthesis"), statements, and questions.
+  - **Dashboard Settings Page:**
+    - New `/lessons/settings/` page for editing AI persona and description.
+    - Settings button in dashboard header.
+    - Form includes: AI Persona, AI Description, Grade Level, Max Sentences.
+    - Example configurations provided for students, homework help, and teachers.
+  - **Architecture Simplification:**
+    - Removed "Pro Mode" complexity from original plan.
+    - Persona/description applies globally to both Recitation and Lesson modes.
+    - Users configure once in dashboard settings, not in desktop app.
 - Production deployment to Render (2026-02-24 to 2026-02-26):
   - Migrated from Render Postgres to Neon Postgres (free tier, no expiry).
   - Neon setup tutorial added to README.md with connection pooling best practices.

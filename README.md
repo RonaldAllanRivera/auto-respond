@@ -83,9 +83,22 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 
 ### AI & Dashboard
 - Subscriber settings (grade level, max sentences)
+- **AI Persona & Description**: Customize AI behavior and role (e.g., "You are a grade 3 student")
 - AI answers stored and streamed in dashboard (SSE)
 - Dual content types: Recitations (live capture) and Lessons (uploaded documents)
 - Page number tracking for PDF transcripts
+- **Delete functionality**: Single and bulk delete for lessons with confirmation dialogs
+- **Select All checkbox**: Bulk select all lessons for deletion
+- **Formatted transcripts**: Preserves line breaks and paragraphs from original documents
+- **Send-all architecture**: Desktop sends ALL text to backend, AI decides what to answer
+
+### Desktop App Stability
+- **Auto-capture**: Automatically detects new clipboard images (Ctrl+C after Print Screen)
+- **Non-blocking UI**: No freezing or shaking during clipboard polling
+- **Daily lesson grouping**: All captures from same day grouped into one lesson
+- **AI-generated titles**: Lesson names generated from first captured text
+- **Long-running stability**: Safe for 4+ hour sessions (~60MB memory, auto-trimming logs)
+- **Comprehensive tests**: 19 tests covering capture, UI responsiveness, OCR, detection
 
 ---
 
@@ -107,8 +120,8 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 10 — Windows desktop installer | Completed |
 | **11 — Document Ingestion Pipeline (Backend)** | **Completed** |
 | **12 — Dashboard Upload & Editing UI** | **Completed** |
-| 13 — Desktop App: Lesson & Pro Modes | In Progress |
-| 14 — Testing & Documentation | Planned |
+| 13 — AI Persona & send-all architecture | Completed |
+| **14 — Desktop App Stability & Auto-Capture** | **Completed** |
 
 See `PLAN.md` for detailed phased deliverables.
 
@@ -150,6 +163,8 @@ See `PLAN.md` for detailed phased deliverables.
 
 ### Dashboard APIs (session auth)
 - `POST /api/lessons/upload/` — upload images/PDFs for OCR and lesson creation
+- `DELETE /api/lessons/<id>/delete/` — delete single lesson with all associated data
+- `POST /api/lessons/bulk-delete/` — delete multiple lessons in bulk
 - `GET /api/questions/<id>/stream/` — stream answer tokens via SSE
 
 ---
