@@ -61,6 +61,13 @@ class MeetLessonsApp:
         self._selected_lesson_id = None
         self._selected_lesson_title = None
         self._lessons_list = []
+        
+        # Session-based lesson grouping (unique per app session)
+        import uuid
+        self._session_id = str(uuid.uuid4())[:8]
+        
+        # Track images being processed by Print Screen to prevent duplicate processing
+        self._print_screen_processing_sig = None
 
         self._build_ui()
         self._refresh_pairing_status()
@@ -500,6 +507,11 @@ class MeetLessonsApp:
                 image = self._grab_image_from_clipboard(silent=True, convert_rgb=False)
                 if image is not None:
                     sig = self._image_signature(image)
+                    
+                    # Skip if this image is being processed by Print Screen hotkey
+                    if sig == self._print_screen_processing_sig:
+                        return
+                    
                     if sig != self._clipboard_last_sig and sig not in self._clipboard_seen:
                         self._clipboard_last_sig = sig
                         self._clipboard_seen.append(sig)
@@ -566,16 +578,27 @@ class MeetLessonsApp:
         """Non-blocking clipboard polling using tkinter after() - prevents UI freezing."""
         if time.time() >= deadline:
             self.root.after(0, lambda: self._log("Screenshot timeout — try again: Print Screen → select region → Ctrl+C"))
+            self._print_screen_processing_sig = None
             return
         
         try:
             image = self._grab_image_from_clipboard(silent=True)
             if image is not None:
-                # Got image! Process it
+                # Got image! Mark it as being processed by Print Screen
+                sig = self._image_signature(image)
+                self._print_screen_processing_sig = sig
+                self._clipboard_last_sig = sig
+                self._clipboard_seen.append(sig)
+                
+                # Process it
                 self._process_image(image)
+                
+                # Clear the flag after processing starts
+                self._print_screen_processing_sig = None
                 return
         except Exception as e:
             self.root.after(0, lambda e=e: self._log(f"Clipboard error: {e}"))
+            self._print_screen_processing_sig = None
             return
         
         # No image yet, poll again in 200ms (non-blocking)
@@ -658,9 +681,9 @@ class MeetLessonsApp:
                                 return
                             self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
                 else:
-                    # Recitation mode: Use session context and daily grouping
+                    # Recitation mode: Use session context and session-based grouping
                     from datetime import datetime
-                    daily_meeting_id = f"screen-capture-{datetime.now().strftime('%Y-%m-%d')}"
+                    session_meeting_id = f"session-{self._session_id}"
                     
                     # Build session context string
                     session_context_str = "\n".join(self._session_context)
@@ -668,7 +691,7 @@ class MeetLessonsApp:
                     result = api_client.send_caption(
                         text=payload_text,
                         speaker="",
-                        meeting_id=daily_meeting_id,
+                        meeting_id=session_meeting_id,
                         meeting_title=""
                     )
                     self.root.after(0, lambda: self._log(
@@ -681,7 +704,7 @@ class MeetLessonsApp:
                             result = api_client.send_question(
                                 question=q,
                                 context=session_context_str,  # Last 10 captions
-                                meeting_id=daily_meeting_id,
+                                meeting_id=session_meeting_id,
                                 meeting_title="",
                                 initial_text=q
                             )
@@ -728,6 +751,7 @@ class MeetLessonsApp:
     def run(self):
         self._log("Meet Lessons Desktop App started")
         self._log(f"Backend: {config.BACKEND_URL}")
+        self._log(f"Session ID: {self._session_id}")
         self._log("Open Google Meet → enable CC → press Print Screen to capture")
         self.root.mainloop()
 
