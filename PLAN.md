@@ -489,6 +489,202 @@ Use Django Admin as the primary CMS:
 
 **Priority:** Low (current implementation works, this is optimization)
 
+### Phase 16 — Desktop App Mode Selection & Lesson UI
+**Goal:** Add UI to desktop app for switching between Recitation and Lesson modes, with lesson selection dropdown and session-based context management.
+
+**Current State:**
+- Backend supports both Recitation and Lesson modes ✓
+- Backend API ready: `GET /api/lessons/list/?source_type=lesson` ✓
+- Desktop app always uses Recitation mode (no UI to switch)
+- Mode selection and lesson dropdown not implemented
+- Context handling: Backend uses last 10 captions (needs session management)
+
+**Implementation Plan:**
+
+- **(desktop)** Add mode selector UI:
+  - Radio buttons: "Recitation Mode (Live)" | "Lesson Mode (Study)"
+  - Place below "Device Pairing" section, above "Screenshot Capture"
+  - Default: Recitation Mode
+  - Persist selection in config file
+  - **Both modes use Print Screen → Ctrl+C** (no manual capture needed)
+
+- **(desktop)** Add lesson selection dropdown:
+  - Only visible when Lesson mode is selected
+  - Fetch lessons from `GET /api/lessons/list/?source_type=lesson`
+  - Display lesson titles in dropdown (e.g., "Photosynthesis Chapter 3", "Math Homework")
+  - Store selected `lesson_id` in memory
+  - Refresh button to reload lesson list
+  - Show "(Upload lessons via web dashboard)" if list is empty
+  - Require lesson selection before allowing captures in Lesson mode
+
+- **(desktop)** Session Context Management (IMPORTANT):
+  - **Purpose:** Maintain conversational context within same session
+  - **Implementation:** Use `deque(maxlen=10)` to store last 10 captured texts
+  - **Memory impact:** ~3KB (negligible)
+  - **Lifecycle:**
+    - App starts → Context is empty
+    - Each capture → Add text to deque (auto-limits to 10)
+    - App closes → Context cleared automatically
+  - **Usage:**
+    - Recitation mode: Send last 10 captions as context to backend
+    - Lesson mode: Send empty context (backend uses lesson transcript)
+  - **Example:**
+    ```python
+    # desktop/main.py
+    class MeetLessonsApp:
+        def __init__(self):
+            self._session_context = deque(maxlen=10)  # Last 10 captions
+        
+        def _process_text(self, text):
+            # Add to session context
+            self._session_context.append(text)
+            
+            # Build context string for API
+            if self._mode == "recitation":
+                context = "\n".join(self._session_context)
+            else:  # lesson mode
+                context = ""  # Backend uses lesson transcript
+            
+            self._send_question(text, context)
+    ```
+  - **Benefits:**
+    - Teacher asks about photosynthesis → Student asks follow-up about chlorophyll
+    - AI knows context from previous questions in same session
+    - Natural conversation flow
+    - Automatic cleanup on app restart
+
+- **(desktop)** Optional: Manual session reset:
+  - Add "Clear Session Context" button
+  - Useful when switching topics mid-session
+  - Clears `_session_context` deque
+
+- **(desktop)** Update API client:
+  - Modify `send_question()` to accept `lesson_id` and `context`
+  - **Recitation mode:** Send `lesson_id=null`, `context=last_10_captions`
+  - **Lesson mode:** Send `lesson_id=selected_id`, `context=""`
+  - Backend automatically detects mode from `lesson_id` presence
+
+- **(desktop)** Update capture workflow:
+  - **Both modes:** Print Screen → Ctrl+C → OCR → detect questions → send to API
+  - **Recitation mode:** Creates/uses daily lesson, includes session context
+  - **Lesson mode:** Uses selected lesson_id, backend uses full lesson transcript
+  - **No manual capture buttons needed** (Print Screen workflow is fast enough)
+
+- **(desktop)** UI Layout:
+  ```
+  ┌─ Device Pairing ────────────────┐
+  │ ✓ Paired (device abc...)        │
+  └─────────────────────────────────┘
+  
+  ┌─ Mode Selection ────────────────┐
+  │ ○ Recitation Mode (Live Capture)│
+  │ ● Lesson Mode (Study Documents) │
+  │                                  │
+  │ Select Lesson:                   │
+  │ [Photosynthesis Chapter 3  ▼]   │
+  │ [Refresh Lessons]                │
+  └─────────────────────────────────┘
+  
+  ┌─ Screenshot Capture ────────────┐
+  │ Press Print Screen to capture   │
+  │ [Capture Now (Manual)]          │
+  └─────────────────────────────────┘
+  ```
+
+- **(backend)** API endpoint already exists:
+  - `GET /api/lessons/list/?source_type=lesson` returns lesson list ✓
+  - `POST /api/questions/` accepts `lesson_id` and `source_type` ✓
+  - No backend changes needed
+
+- **(testing)** Verification steps:
+  - Test mode switching updates UI correctly
+  - Test lesson dropdown populates from API
+  - Test Recitation mode sends questions with session context
+  - Test Lesson mode sends questions with selected lesson_id
+  - Test backend uses correct AI behavior for each mode
+  - Test session context accumulates and clears on app restart
+  - Test Print Screen hotkey works in both modes
+
+**User Workflow:**
+
+**Recitation Mode (Homework Help with Session Context):**
+1. Select "Recitation Mode"
+2. Press Print Screen → select region → Ctrl+C
+3. Desktop app captures, runs OCR, detects questions
+4. Adds text to session context (last 10 captions)
+5. Sends to backend with persona/description + session context
+6. AI answers as student with awareness of previous questions in session
+7. Example conversation:
+   - Q1: "What is photosynthesis?" → AI answers
+   - Q2: "What is chlorophyll?" → AI knows context from Q1
+   - Q3: "How do plants use it?" → AI knows context from Q1 & Q2
+
+**Lesson Mode (Study from Uploaded Documents):**
+1. Upload PDF via web dashboard (e.g., "Photosynthesis Chapter 3")
+2. Select "Lesson Mode" in desktop app
+3. Choose lesson from dropdown: "Photosynthesis Chapter 3"
+4. Press Print Screen → select region → Ctrl+C
+5. Desktop app captures, runs OCR, detects questions
+6. Sends to backend with lesson_id (no session context needed)
+7. AI explains based on uploaded document content (tutor mode)
+8. Answer appears on web dashboard under selected lesson
+
+**API Examples:**
+
+**Recitation Mode (with session context):**
+```python
+# First question in session
+POST /api/questions/
+{
+    "question": "What is photosynthesis?",
+    "lesson_id": null,
+    "context": "",  # Empty on first question
+    "initial_text": "What is photosynthesis?"
+}
+
+# Second question in same session
+POST /api/questions/
+{
+    "question": "What is chlorophyll?",
+    "lesson_id": null,
+    "context": "Q1: What is photosynthesis?",  # Last 10 captions
+    "initial_text": "What is chlorophyll?"
+}
+
+# Backend behavior:
+# - Uses persona + description from user settings
+# - Includes session context in AI prompt
+# - AI knows previous questions in conversation
+```
+
+**Lesson Mode (with lesson transcript):**
+```python
+POST /api/questions/
+{
+    "question": "What is photosynthesis?",
+    "lesson_id": 42,  # Selected from dropdown
+    "context": "",  # Ignored - backend uses lesson transcript
+    "initial_text": "What is photosynthesis?"
+}
+
+# Backend behavior:
+# - Detects lesson_id is present → Lesson mode
+# - Fetches full lesson transcript from database
+# - Uses tutor mode (ignores persona/description)
+# - AI explains based on uploaded document content
+```
+
+**Benefits:**
+- ✅ Clear user control over Recitation vs Lesson modes
+- ✅ Session context enables natural conversation flow in Recitation mode
+- ✅ Lesson mode enables studying from uploaded documents
+- ✅ Backend already supports both modes (no backend changes needed)
+- ✅ Simple UI with radio buttons and dropdown
+- ✅ Backward compatible (defaults to Recitation mode)
+- ✅ Memory-efficient session management (~3KB)
+
+**Priority:** Medium (enhances usability, backend already ready)
+
 ## 11) Testing
 
 This document intentionally stays high-level.
