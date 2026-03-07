@@ -685,6 +685,75 @@ POST /api/questions/
 
 **Priority:** Medium (enhances usability, backend already ready)
 
+### Phase 17 — Daily AI Output Limits (Future)
+**Goal:** Implement daily question limits per user to control OpenAI API costs and prevent abuse.
+
+**Current State:**
+- No daily limits on AI questions
+- Only subscription check (active subscription = unlimited questions)
+- No rate limiting or usage quotas
+- No tracking of daily question counts
+
+**Implementation Plan:**
+
+- **(backend)** Add daily question counter:
+  - Track `QuestionAnswer` count per user per day
+  - Add `daily_question_limit` field to `BillingPlan` model
+  - Default limits: Basic = 50/day, Pro = 200/day, Unlimited = None
+
+- **(backend)** Implement limit checking:
+  - Check daily count before calling OpenAI API
+  - Return 429 (Too Many Requests) when limit exceeded
+  - Include reset time in error response (midnight UTC)
+
+- **(backend)** Add usage tracking:
+  - Create `DailyUsage` model to track questions per day
+  - Aggregate queries for dashboard analytics
+  - Cache daily counts in Redis for performance
+
+- **(dashboard)** Usage display:
+  - Show "X / Y questions used today" in dashboard header
+  - Progress bar for daily limit
+  - Upgrade prompt when approaching limit
+
+- **(desktop)** Handle limit errors:
+  - Display friendly error message in activity log
+  - Show "Daily limit reached - upgrade or wait until tomorrow"
+  - Don't retry automatically when limit hit
+
+**API Response Example:**
+```python
+# When limit exceeded
+{
+    "error": "Daily question limit reached",
+    "limit": 50,
+    "used": 50,
+    "reset_at": "2026-03-08T00:00:00Z",
+    "upgrade_url": "https://meetlessons.com/billing/"
+}
+```
+
+**Database Schema:**
+```python
+class DailyUsage(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField()
+    question_count = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        unique_together = [["user", "date"]]
+        indexes = [models.Index(fields=["user", "date"])]
+```
+
+**Benefits:**
+- ✅ Control OpenAI API costs
+- ✅ Prevent abuse (spam questions)
+- ✅ Encourage upgrades to higher tiers
+- ✅ Fair usage across all users
+- ✅ Analytics for usage patterns
+
+**Priority:** Low (cost control, not critical for MVP)
+
 ## 11) Testing
 
 This document intentionally stays high-level.
