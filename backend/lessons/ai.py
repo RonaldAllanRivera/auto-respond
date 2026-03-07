@@ -22,32 +22,58 @@ def _get_client() -> OpenAI:
     )
 
 
-def _build_prompt(question: str, context: str, grade_level: int, max_sentences: int,
-                  persona: str = "", description: str = "") -> list[dict]:
-    """Build the chat messages for the OpenAI API call."""
-    # Use custom persona or default
-    if persona:
-        system_msg = f"{persona}. "
+def _build_prompt(question: str, context: str, max_sentences: int,
+                  persona: str = "", description: str = "", source_type: str = "recitation") -> list[dict]:
+    """Build the chat messages for the OpenAI API call.
+    
+    Args:
+        question: The question to answer
+        context: Lesson context or recent captions
+        max_sentences: Max sentences in answer
+        persona: AI persona for recitation mode
+        description: AI description for recitation mode
+        source_type: 'recitation' (live capture) or 'lesson' (uploaded document)
+    """
+    # Different AI roles based on source type
+    if source_type == "lesson":
+        # Lesson mode: Act as tutor explaining uploaded document content
+        system_msg = (
+            f"You are a helpful tutor. Explain concepts from the lesson clearly and concisely "
+            f"in {max_sentences} sentence(s) or fewer. Base your answer on the lesson content provided. "
+            f"If the question involves a calculation, show the steps briefly."
+        )
     else:
-        system_msg = f"You are a helpful teaching assistant for a Grade {grade_level} student. "
-    
-    # Add description if provided
-    if description:
-        system_msg += f"{description}. "
-    
-    # Add standard instructions
-    system_msg += (
-        f"Answer the question clearly and concisely in {max_sentences} sentence(s) or fewer. "
-        f"Use simple language appropriate for a Grade {grade_level} student. "
-        f"If the question involves a calculation, show the steps briefly."
-    )
+        # Recitation mode: Use persona/description for homework help
+        if persona:
+            system_msg = f"{persona}. "
+        else:
+            system_msg = "You are a helpful tutor. "
+        
+        # Add description if provided
+        if description:
+            system_msg += f"{description}. "
+        
+        # Add standard instructions
+        system_msg += (
+            f"Answer the question clearly and concisely in {max_sentences} sentence(s) or fewer. "
+            f"If the question involves a calculation, show the steps briefly."
+        )
 
+    # Build user message with context
     user_msg = question
     if context:
-        user_msg = (
-            f"Context from the lesson:\n{context}\n\n"
-            f"Question: {question}"
-        )
+        if source_type == "lesson":
+            # Lesson mode: Provide full lesson content as context
+            user_msg = (
+                f"Lesson content:\n{context}\n\n"
+                f"Question: {question}"
+            )
+        else:
+            # Recitation mode: Provide recent captions as context
+            user_msg = (
+                f"Recent captions:\n{context}\n\n"
+                f"Question: {question}"
+            )
 
     return [
         {"role": "system", "content": system_msg},
@@ -56,18 +82,19 @@ def _build_prompt(question: str, context: str, grade_level: int, max_sentences: 
 
 
 def answer_question(question: str, context: str = "",
-                    grade_level: int = 3, max_sentences: int = 2,
-                    persona: str = "", description: str = "") -> dict:
+                    max_sentences: int = 2,
+                    persona: str = "", description: str = "",
+                    source_type: str = "recitation") -> dict:
     """
     Call OpenAI to answer a question synchronously.
 
     Args:
         question: The question or prompt to answer
         context: Lesson context or previous captions
-        grade_level: Student grade level (1-12)
         max_sentences: Max sentences in answer
-        persona: AI persona/role (e.g., "You are a grade 3 student")
-        description: Additional AI instructions (e.g., "Help me impress my teacher")
+        persona: AI persona/role for recitation mode (e.g., "You are a grade 3 student")
+        description: Additional AI instructions for recitation mode (e.g., "Help me impress my teacher")
+        source_type: 'recitation' (uses persona) or 'lesson' (uses tutor mode)
 
     Returns:
         {
@@ -84,7 +111,7 @@ def answer_question(question: str, context: str = "",
         }
 
     client = _get_client()
-    messages = _build_prompt(question, context, grade_level, max_sentences, persona, description)
+    messages = _build_prompt(question, context, max_sentences, persona, description, source_type)
     model = settings.OPENAI_MODEL
 
     start = time.time()
@@ -114,10 +141,19 @@ def answer_question(question: str, context: str = "",
 
 
 def answer_question_streaming(question: str, context: str = "",
-                              grade_level: int = 3, max_sentences: int = 2,
-                              persona: str = "", description: str = ""):
+                              max_sentences: int = 2,
+                              persona: str = "", description: str = "",
+                              source_type: str = "recitation"):
     """
     Call OpenAI to answer a question with streaming.
+    
+    Args:
+        question: The question to answer
+        context: Lesson context or recent captions
+        max_sentences: Max sentences in answer
+        persona: AI persona for recitation mode
+        description: AI description for recitation mode
+        source_type: 'recitation' (uses persona) or 'lesson' (uses tutor mode)
 
     Yields answer tokens as strings. The caller can use these for SSE.
     """
@@ -126,7 +162,7 @@ def answer_question_streaming(question: str, context: str = "",
         return
 
     client = _get_client()
-    messages = _build_prompt(question, context, grade_level, max_sentences, persona, description)
+    messages = _build_prompt(question, context, max_sentences, persona, description, source_type)
     model = settings.OPENAI_MODEL
 
     try:

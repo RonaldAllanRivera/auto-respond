@@ -86,28 +86,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `desktop/LONG_RUNNING.md` - 4-hour session stability guide.
     - Memory benchmarks and monitoring commands.
     - Fixes issue where desktop app ignored non-interrogative statements.
-- Phase 13 Simplified AI Persona & Send-All Architecture (2026-03-07):
+- Phase 13 AI Persona & Mode-Specific Behavior (2026-03-07):
   - **Backend AI Customization:**
     - Added `ai_persona` and `ai_description` fields to SubscriberProfile model.
-    - AI prompt construction now uses persona + description + grade level.
-    - Example: persona="You are a grade 3 student", description="Help me impress my teacher".
-  - **API Updates:**
-    - `POST /api/questions/` accepts optional `persona` and `description` parameters.
-    - Falls back to user settings if not provided in request.
-    - Both sync and streaming endpoints support persona/description.
-  - **Desktop App Simplification:**
-    - Removed keyword filtering - sends ALL non-noise text to backend.
-    - Desktop app no longer decides what is a "question".
-    - Backend AI decides what to answer based on persona/description.
-    - Handles single words ("photosynthesis"), statements, and questions.
-  - **Dashboard Settings Page:**
-    - New `/lessons/settings/` page for editing AI persona and description.
-    - Settings button in dashboard header.
-    - Form includes: AI Persona, AI Description, Grade Level, Max Sentences.
-    - Example configurations provided for students, homework help, and teachers.
-  - **Architecture Simplification:**
-    - Removed "Pro Mode" complexity from original plan.
-    - Persona/description applies globally to both Recitation and Lesson modes.
+    - Created `/lessons/settings/` page for editing persona and description.
+    - Removed `grade_level` from UI (kept in database for backward compatibility).
+  - **Mode-Specific AI Behavior:**
+    - **Recitation mode**: Uses persona + description from user settings for homework help.
+    - **Lesson mode**: Uses tutor mode to explain uploaded document content (ignores persona).
+    - Added `source_type` parameter to all AI functions (`answer_question`, `answer_question_streaming`).
+    - Different system prompts based on `lesson.source_type`.
+  - **Smart Context Handling:**
+    - Recitation mode: Uses last 10 captions as context.
+    - Lesson mode: Uses full lesson transcript with page numbers formatted as `[Page X]`.
+    - Optimized context for each mode's use case.
+  - **Code Cleanup:**
+    - Removed `grade_level` from settings view POST handler.
+    - Removed `grade_level` from admin display and forms.
+    - Removed `grade_level` from AI prompt construction.
+    - Updated all AI function signatures to remove grade_level parameter.
     - Users configure once in dashboard settings, not in desktop app.
 - Production deployment to Render (2026-02-24 to 2026-02-26):
   - Migrated from Render Postgres to Neon Postgres (free tier, no expiry).

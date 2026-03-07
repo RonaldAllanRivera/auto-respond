@@ -239,12 +239,24 @@ def api_questions(request: HttpRequest) -> JsonResponse:
     if not user_has_active_subscription(request.user):
         return JsonResponse({"error": "Subscription required"}, status=403)
 
-    # Gather recent transcript context from the lesson
+    # Gather transcript context based on lesson source type
     full_context = context
     if lesson:
-        recent_chunks = lesson.transcript_chunks.order_by("-created_at")[:10]
-        chunk_texts = [c.text for c in reversed(recent_chunks)]
-        full_context = "\n".join(chunk_texts)
+        if lesson.source_type == "lesson":
+            # Lesson mode: Use full lesson transcript as context
+            all_chunks = lesson.transcript_chunks.order_by("created_at")
+            chunk_texts = []
+            for chunk in all_chunks:
+                if chunk.page_number:
+                    chunk_texts.append(f"[Page {chunk.page_number}] {chunk.text}")
+                else:
+                    chunk_texts.append(chunk.text)
+            full_context = "\n".join(chunk_texts)
+        else:
+            # Recitation mode: Use recent captions as context
+            recent_chunks = lesson.transcript_chunks.order_by("-created_at")[:10]
+            chunk_texts = [c.text for c in reversed(recent_chunks)]
+            full_context = "\n".join(chunk_texts)
 
     # Use persona/description from request, fallback to user settings
     final_persona = persona or profile.ai_persona
@@ -254,10 +266,10 @@ def api_questions(request: HttpRequest) -> JsonResponse:
     ai_result = answer_question(
         question=question_text,
         context=full_context,
-        grade_level=profile.grade_level,
         max_sentences=profile.max_sentences,
         persona=final_persona,
         description=final_description,
+        source_type=lesson.source_type,
     )
 
     # Store the question + answer
@@ -319,11 +331,24 @@ def api_question_stream(request: HttpRequest, question_id: int) -> StreamingHttp
     # Stream from OpenAI
     profile = SubscriberProfile.get_for_user(request.user)
 
+    # Build context based on lesson source type
     full_context = ""
     if qa.lesson:
-        recent_chunks = qa.lesson.transcript_chunks.order_by("-created_at")[:10]
-        chunk_texts = [c.text for c in reversed(recent_chunks)]
-        full_context = "\n".join(chunk_texts)
+        if qa.lesson.source_type == "lesson":
+            # Lesson mode: Use full lesson transcript as context
+            all_chunks = qa.lesson.transcript_chunks.order_by("created_at")
+            chunk_texts = []
+            for chunk in all_chunks:
+                if chunk.page_number:
+                    chunk_texts.append(f"[Page {chunk.page_number}] {chunk.text}")
+                else:
+                    chunk_texts.append(chunk.text)
+            full_context = "\n".join(chunk_texts)
+        else:
+            # Recitation mode: Use recent captions as context
+            recent_chunks = qa.lesson.transcript_chunks.order_by("-created_at")[:10]
+            chunk_texts = [c.text for c in reversed(recent_chunks)]
+            full_context = "\n".join(chunk_texts)
 
     def stream_tokens():
         full_answer = []
@@ -331,10 +356,10 @@ def api_question_stream(request: HttpRequest, question_id: int) -> StreamingHttp
         for token in answer_question_streaming(
             question=qa.question,
             context=full_context,
-            grade_level=profile.grade_level,
             max_sentences=profile.max_sentences,
             persona=profile.ai_persona,
             description=profile.ai_description,
+            source_type=qa.lesson.source_type if qa.lesson else "recitation",
         ):
             full_answer.append(token)
             yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"

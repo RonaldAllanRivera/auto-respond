@@ -80,7 +80,6 @@ def settings(request: HttpRequest) -> HttpResponse:
     
     if request.method == "POST":
         # Update settings
-        profile.grade_level = int(request.POST.get("grade_level", 3))
         profile.max_sentences = int(request.POST.get("max_sentences", 2))
         profile.ai_persona = request.POST.get("ai_persona", "").strip()
         profile.ai_description = request.POST.get("ai_description", "").strip()

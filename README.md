@@ -82,15 +82,19 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - **Cost-effective**: OCR is free (local), AI naming ~$0.0001 per lesson
 
 ### AI & Dashboard
-- Subscriber settings (grade level, max sentences)
-- **AI Persona & Description**: Customize AI behavior and role (e.g., "You are a grade 3 student")
+- Subscriber settings (max sentences, AI persona, AI description)
+- **AI Persona & Description**: Customize AI behavior for recitation mode (e.g., "You are a grade 3 student")
+- **Mode-specific AI behavior**:
+  - **Recitation mode**: Uses persona + description for homework help
+  - **Lesson mode**: Uses tutor mode to explain uploaded document content
 - AI answers stored and streamed in dashboard (SSE)
 - Dual content types: Recitations (live capture) and Lessons (uploaded documents)
-- Page number tracking for PDF transcripts
+- **Smart context handling**:
+  - Recitation: Uses last 10 captions as context
+  - Lesson: Uses full transcript with page numbers
 - **Delete functionality**: Single and bulk delete for lessons with confirmation dialogs
 - **Select All checkbox**: Bulk select all lessons for deletion
 - **Formatted transcripts**: Preserves line breaks and paragraphs from original documents
-- **Send-all architecture**: Desktop sends ALL text to backend, AI decides what to answer
 
 ### Desktop App Stability
 - **Auto-capture**: Automatically detects new clipboard images (Ctrl+C after Print Screen)

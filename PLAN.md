@@ -391,43 +391,37 @@ Use Django Admin as the primary CMS:
   - Clear user feedback on success/error
   - Preserve original document formatting
 
-### Phase 13 — Simplified AI Persona & Send-All Architecture
-**Goal:** Remove Pro mode complexity. Add global persona/description settings that apply to both Recitation and Lesson modes. Send ALL captured text to backend (no keyword filtering).
+### Phase 13 — AI Persona & Mode-Specific Behavior ✓ Completed
+**Goal:** Add AI persona/description customization and implement different AI roles for Recitation vs Lesson modes.
 
-- **(backend)** Add persona and description to UserSettings:
-  - `ai_persona` field (TextField, optional, default: "You are a helpful tutor")
-  - `ai_description` field (TextField, optional, default: "")
-  - Example: persona="You are a grade 3 student", description="Help me impress my teacher and get high grades"
-- **(backend)** Update `POST /api/questions/` API:
-  - Accept `persona` and `description` in request body
-  - Construct AI system prompt using persona + description + grade level
-  - Format: "System: {persona}. {description}. Answer in {max_sentences} sentences for grade {grade_level}."
-- **(backend)** Update AI prompt construction:
-  - Use persona/description from request OR user settings (request overrides)
-  - Apply to both Recitation and Lesson mode questions
-  - Maintain existing context handling (previous captions or lesson transcript)
-- **(desktop)** Remove keyword filtering in detector.py:
-  - Send ALL non-noise text to backend (not just questions)
-  - Keep `looks_like_noise()` filter for URLs and UI trash
-  - Let backend AI decide what to answer
-  - Rationale: More flexible, handles "photosynthesis" → AI answers based on persona
-- **(desktop)** Simplify mode selector:
-  - Remove "Pro Mode" option
-  - Keep only: Recitation Mode, Lesson Mode
-  - Disable hotkeys in Lesson mode (same as before)
-- **(desktop)** Add Settings fields:
-  - AI Persona (text input, optional)
-  - AI Description (text input, optional)
-  - Applies globally to both Recitation and Lesson modes
-  - Sent with every API call to `/api/questions/`
-- **(desktop)** Update Lesson Mode:
-  - Lesson selection dropdown (fetched from `/api/lessons/list/?source_type=lesson`)
-  - Send questions with selected lesson_id + persona + description
-  - AI answers based on lesson transcript + persona context
-- **(desktop)** Update API client:
-  - Include persona and description in all `/api/questions/` calls
-  - Read from Settings, send with every request
-  - Backend uses these to customize AI responses
+- **(backend)** AI persona and description settings: ✓
+  - Added `ai_persona` field (TextField, optional, default: "You are a helpful tutor") ✓
+  - Added `ai_description` field (TextField, optional, default: "") ✓
+  - Created `/lessons/settings/` page for editing persona and description ✓
+  - Removed grade_level from UI (kept in database for backward compatibility) ✓
+- **(backend)** Mode-specific AI behavior: ✓
+  - **Recitation mode:** Uses persona + description from user settings ✓
+  - **Lesson mode:** Uses tutor mode, ignores persona/description ✓
+  - Added `source_type` parameter to all AI functions ✓
+  - Different system prompts based on `lesson.source_type` ✓
+- **(backend)** Context handling improvements: ✓
+  - Recitation mode: Uses last 10 captions as context ✓
+  - Lesson mode: Uses **full lesson transcript** with page numbers ✓
+  - Page numbers formatted as `[Page X]` in lesson context ✓
+- **(backend)** AI prompt construction: ✓
+  - Recitation: "{persona}. {description}. Answer in {max_sentences} sentences..." ✓
+  - Lesson: "You are a helpful tutor. Explain concepts from the lesson clearly..." ✓
+  - Removed all grade_level references from prompts ✓
+- **(backend)** Code cleanup: ✓
+  - Removed grade_level from settings view POST handler ✓
+  - Removed grade_level from admin display ✓
+  - Removed grade_level from forms ✓
+  - Updated `answer_question()` and `answer_question_streaming()` signatures ✓
+- **Best practices:**
+  - Clear separation: Recitation = homework help, Lesson = study help
+  - Context optimization: Recent captions vs full transcript
+  - Backward compatible: Defaults to recitation mode if not specified
+  - User control: Persona settings only affect recitation mode
 
 ### Phase 14 — Desktop App Stability & Auto-Capture ✓ Completed
 - **(desktop)** Fixed UI freezing/shaking: ✓
@@ -456,6 +450,44 @@ Use Django Admin as the primary CMS:
   - `desktop/README_TESTS.md` - Test suite documentation ✓
   - `desktop/LONG_RUNNING.md` - 4-hour session stability guide ✓
   - Memory benchmarks and monitoring commands ✓
+
+### Phase 15 — Desktop Clipboard Polling Optimization (Future)
+**Goal:** Eliminate desktop icon shaking by implementing event-driven clipboard monitoring instead of continuous polling.
+
+**Current Issue:**
+- Clipboard polling every 0.9-4 seconds causes desktop icon to shake
+- Unnecessary CPU/battery usage when idle
+- May trigger antivirus alerts
+
+**Solution: Option 4 - Hybrid Approach (Recommended)**
+- **(desktop)** Disable continuous clipboard polling by default
+- **(desktop)** Start temporary clipboard polling only when Print Screen is pressed
+- **(desktop)** Poll for 10 seconds after Print Screen, then auto-stop
+- **(desktop)** Zero resource usage when idle (no polling)
+- **(desktop)** Auto-capture still works: Print Screen → select region → Ctrl+C
+
+**Implementation:**
+```python
+# Idle state: No clipboard polling (0% CPU)
+# Print Screen pressed: Start 10-second temporary polling
+# Capture detected: Stop polling, return to idle
+# Timeout: Stop polling after 10 seconds, return to idle
+```
+
+**Benefits:**
+- ✅ No icon shaking during idle
+- ✅ Auto-captures on Ctrl+C after Print Screen
+- ✅ Zero resource usage when not capturing
+- ✅ Better battery life on laptops
+- ✅ Cleaner system behavior
+
+**Alternative Approaches Considered:**
+1. Disable polling entirely (requires manual button click)
+2. Event-driven monitoring (platform-specific, complex)
+3. Adaptive polling with idle detection (still some polling)
+4. **Hybrid approach (recommended)** - best balance of functionality and performance
+
+**Priority:** Low (current implementation works, this is optimization)
 
 ## 11) Testing
 
