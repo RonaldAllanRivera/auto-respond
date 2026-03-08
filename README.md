@@ -60,7 +60,11 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - Coupon codes (admin-managed, backed by Stripe Promotion Codes or Coupon IDs)
 - Entitlement checks for AI answering when billing is enabled
 
-### Desktop App (Recitation Mode)
+### Desktop App
+- **Mode Selection**: Switch between Recitation (homework help) and Lesson (study documents) modes
+- **Lesson Dropdown**: Select from uploaded lessons in Lesson mode
+- **Session Context**: Maintains last 10 captions for conversational flow in Recitation mode
+- **Session-based Grouping**: Each app session creates a new lesson (unique session ID)
 - Device pairing (`POST /api/devices/pair/`) with revocation
 - Screenshot OCR ingestion + server-side dedupe
 - Question detection:
@@ -85,12 +89,13 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - Subscriber settings (max sentences, AI persona, AI description)
 - **AI Persona & Description**: Customize AI behavior for recitation mode (e.g., "You are a grade 3 student")
 - **Mode-specific AI behavior**:
-  - **Recitation mode**: Uses persona + description for homework help
+  - **Recitation mode**: Uses persona + description + session context for homework help
   - **Lesson mode**: Uses tutor mode to explain uploaded document content
+- **Markdown Rendering**: AI answers display with proper formatting (bold, italic, code blocks)
 - AI answers stored and streamed in dashboard (SSE)
 - Dual content types: Recitations (live capture) and Lessons (uploaded documents)
 - **Smart context handling**:
-  - Recitation: Uses last 10 captions as context
+  - Recitation: Uses session context (last 10 captions from desktop app)
   - Lesson: Uses full transcript with page numbers
 - **Delete functionality**: Single and bulk delete for lessons with confirmation dialogs
 - **Select All checkbox**: Bulk select all lessons for deletion
@@ -99,10 +104,11 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 ### Desktop App Stability
 - **Auto-capture**: Automatically detects new clipboard images (Ctrl+C after Print Screen)
 - **Non-blocking UI**: No freezing or shaking during clipboard polling
-- **Daily lesson grouping**: All captures from same day grouped into one lesson
+- **Session-based grouping**: Each app session creates a new lesson with unique ID
 - **AI-generated titles**: Lesson names generated from first captured text
 - **Long-running stability**: Safe for 4+ hour sessions (~60MB memory, auto-trimming logs)
 - **Comprehensive tests**: 19 tests covering capture, UI responsiveness, OCR, detection
+- **Bug fixes**: Resolved duplicate capture issue (Print Screen + clipboard watcher conflict)
 
 ---
 
@@ -126,6 +132,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | **12 — Dashboard Upload & Editing UI** | **Completed** |
 | 13 — AI Persona & send-all architecture | Completed |
 | **14 — Desktop App Stability & Auto-Capture** | **Completed** |
+| **16 — Desktop App Mode Selection & Lesson UI** | **Completed** |
 
 See `PLAN.md` for detailed phased deliverables.
 
@@ -152,8 +159,7 @@ See `PLAN.md` for detailed phased deliverables.
 
 ### Infra / DevEx
 - Docker Compose
-- Render (target deployment)
-- Fly.io (alternative deployment)
+- Render (production deployment)
 
 ---
 
@@ -750,207 +756,6 @@ When you publish a new installer version:
 2. GitHub Actions builds and publishes `MeetLessonsInstaller.exe` automatically
 3. Update `DESKTOP_DOWNLOAD_URL` on Render to the new release URL
 4. Redeploy (or Render auto-deploys on push)
-
----
-
-## Alternative deployment: Fly.io (free tier, no sleep)
-
-Fly.io offers a free tier with no sleep delays, perfect for testing. Your app stays always-on and responsive.
-
-### Why Fly.io?
-
-- **Always-on** (no sleep) - instant responses
-- **160 shared CPU hours/month** (enough for development testing)
-- **100GB outbound data/month**
-- **3GB persistent storage**
-- **Same Docker deployment** as Render (zero migration)
-
-### Complete Fly.io deployment (Ubuntu)
-
-#### Step 1: Install Fly CLI
-
-```bash
-# Install Fly CLI on Ubuntu
-curl -L https://fly.io/install.sh | sh
-
-# Add to PATH (restart terminal or run this)
-source ~/.bashrc
-```
-
-#### Step 2: Login and initialize
-
-```bash
-# Navigate to backend directory
-cd /home/allan/code/python/auto-respond/backend
-
-# Login to Fly.io
-fly auth login
-
-# Initialize new app
-fly launch
-```
-
-**During `fly launch` setup:**
-- **App name**: `auto-respond` (or your choice)
-- **Region**: Choose closest to you (e.g., `sjc` for San Jose, `iad` for Virginia)
-- **Postgres**: Type `n` (skip - keep using Neon)
-- **Deploy now**: Type `n` (configure first)
-
-#### Step 3: Create Fly.io configuration
-
-Create `backend/fly.toml`:
-
-```bash
-cat > fly.toml << 'EOF'
-app = "auto-respond"
-
-[build]
-  dockerfile = "Dockerfile"
-
-[http_service]
-  internal_port = 8000
-  force_https = true
-
-[[http_service.checks]]
-  interval = "15s"
-  timeout = "2s"
-  grace_period = "5s"
-  method = "GET"
-  path = "/"
-EOF
-```
-
-#### Step 4: Set environment variables
-
-Copy these from your Render dashboard (replace with your actual values):
-
-```bash
-flyctl secrets set \
-  DJANGO_SECRET_KEY="your-django-secret-key-from-render" \
-  DATABASE_URL="your-neon-postgres-connection-string" \
-  STRIPE_SECRET_KEY="sk_test_your_stripe_secret_key" \
-  STRIPE_WEBHOOK_SECRET="whsec_your_stripe_webhook_secret" \
-  OPENAI_API_KEY="sk-your_openai_api_key" \
-  DEVICE_TOKEN_SECRET="your-device-token-secret-from-render" \
-  DJANGO_ALLOWED_HOSTS="auto-respond.fly.dev" \
-  DJANGO_CSRF_TRUSTED_ORIGINS="https://auto-respond.fly.dev" \
-  SITE_ID=1 \
-  DESKTOP_DOWNLOAD_URL="https://github.com/RonaldAllanRivera/auto-respond/releases/download/v1.0.6/MeetLessonsInstaller.exe"
-```
-
-#### Step 5: Deploy
-
-```bash
-# Deploy to Fly.io
-fly deploy
-```
-
-Your app will be available at: `https://auto-respond.fly.dev`
-
-#### Step 6: Update external services
-
-**Stripe webhook:**
-1. Go to [Stripe Workbench](https://dashboard.stripe.com/test/workbench/webhooks)
-2. Click your destination → **Edit**
-3. Change URL to: `https://auto-respond.fly.dev/billing/webhook/`
-4. Save → Copy new signing secret
-5. Update Fly secrets:
-   ```bash
-   flyctl secrets set STRIPE_WEBHOOK_SECRET="whsec_new_signing_secret"
-   ```
-
-**Google OAuth:**
-1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Find your OAuth 2.0 Client ID
-3. Add to **Authorized redirect URIs**:
-   ```
-   https://auto-respond.fly.dev/accounts/google/login/callback/
-   ```
-
-#### Step 7: Post-deploy setup
-
-1. **Create superuser** (if needed):
-   ```bash
-   flyctl ssh console
-   python manage.py createsuperuser
-   ```
-
-2. **Configure Django Admin**:
-   - Visit: `https://auto-respond.fly.dev/admin/`
-   - **Sites** → Update domain to `auto-respond.fly.dev`
-   - **Social Applications** → Update Google OAuth
-   - **Billing → Billing plans** → Verify `stripe_monthly_price_id`
-
-#### Step 8: Test deployment
-
-```bash
-# Check app status
-flyctl status
-
-# View logs
-flyctl logs
-
-# Test the app
-curl https://auto-respond.fly.dev/
-```
-
-### Managing free tier usage (Ubuntu)
-
-#### Scale to zero (save CPU hours when not testing)
-
-```bash
-# Stop app (scale to 0 instances)
-flyctl scale count 0
-
-# Start app (scale back to 1 instance)
-flyctl scale count 1
-```
-
-#### Monitor usage
-
-```bash
-# Check current status
-flyctl status
-
-# View monthly usage (CPU, data, storage)
-flyctl usage
-
-# Detailed metrics
-flyctl metrics --app auto-respond
-
-# Real-time logs
-flyctl logs --follow
-```
-
-#### Free tier limits (2026)
-
-- **160 shared CPU hours/month** (~5.3 hours/day)
-- **100GB outbound data/month**
-- **256MB RAM per instance**
-- **3GB persistent storage**
-
-Your Django app uses ~80MB RAM, so it fits comfortably within limits.
-
-#### Daily workflow example
-
-```bash
-# Start testing
-flyctl scale count 1
-
-# ... test your app at https://auto-respond.fly.dev ...
-
-# Stop when done (saves CPU hours)
-flyctl scale count 0
-```
-
-### Troubleshooting Fly.io
-
-| Issue | Fix |
-|---|---|
-| App won't start | Check `flyctl logs` for errors |
-| Database connection | Ensure `DATABASE_URL` is set correctly |
-| 502 errors | Run `flyctl status` to check app health |
-| Approaching CPU limit | Scale to zero when not testing |
 
 ---
 

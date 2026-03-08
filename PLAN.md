@@ -489,15 +489,22 @@ Use Django Admin as the primary CMS:
 
 **Priority:** Low (current implementation works, this is optimization)
 
-### Phase 16 — Desktop App Mode Selection & Lesson UI
+### Phase 16 — Desktop App Mode Selection & Lesson UI ✅ COMPLETED
 **Goal:** Add UI to desktop app for switching between Recitation and Lesson modes, with lesson selection dropdown and session-based context management.
 
-**Current State:**
-- Backend supports both Recitation and Lesson modes ✓
-- Backend API ready: `GET /api/lessons/list/?source_type=lesson` ✓
-- Desktop app always uses Recitation mode (no UI to switch)
-- Mode selection and lesson dropdown not implemented
-- Context handling: Backend uses last 10 captions (needs session management)
+**Status:** ✅ Completed (Mar 8, 2026)
+
+**What Was Implemented:**
+- ✅ Mode selector UI with radio buttons (Recitation vs Lesson)
+- ✅ Lesson selection dropdown (fetches from backend API)
+- ✅ Session context management using `deque(maxlen=10)`
+- ✅ Session-based lesson grouping (unique ID per app session)
+- ✅ Mode-specific API calls (lesson_id + context)
+- ✅ Config persistence for mode selection
+- ✅ Clear session context button
+- ✅ Fixed duplicate capture bug (Print Screen + clipboard watcher conflict)
+- ✅ Fixed lesson loading bug (API response parsing)
+- ✅ Markdown rendering for AI answers
 
 **Implementation Plan:**
 

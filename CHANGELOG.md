@@ -8,6 +8,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 16 Desktop App Mode Selection & Lesson UI (2026-03-08):
+  - **Mode Selection UI:**
+    - Radio buttons for switching between Recitation and Lesson modes.
+    - Mode selection persisted in config file.
+    - Lesson dropdown only visible in Lesson mode.
+  - **Lesson Management:**
+    - Lesson dropdown fetches from `GET /api/lessons/list/?source_type=lesson`.
+    - Displays lesson titles with IDs.
+    - Refresh button to reload lesson list.
+    - Auto-selects first lesson if available.
+    - Shows "(Upload lessons via web dashboard)" if list is empty.
+  - **Session Context Management:**
+    - Implemented `deque(maxlen=10)` for last 10 captured texts.
+    - Session context maintained during app runtime (~3KB memory).
+    - Clears automatically on app restart.
+    - "Clear Session Context" button for manual reset.
+    - Session info display shows capture count.
+  - **Session-Based Grouping:**
+    - Changed from daily grouping to session-based grouping.
+    - Each app session gets unique UUID-based session ID.
+    - meeting_id format: `session-{uuid}` instead of `screen-capture-YYYY-MM-DD`.
+    - New lesson created per app session for better organization.
+  - **Mode-Specific API Calls:**
+    - Recitation mode: Sends `context=last_10_captions`, `lesson_id=null`.
+    - Lesson mode: Sends `lesson_id=selected_id`, `context=""`.
+    - Backend uses session context for Recitation, full transcript for Lesson.
+  - **Bug Fixes:**
+    - Fixed duplicate capture bug (Print Screen + clipboard watcher both processing same image).
+    - Added `_print_screen_processing_sig` flag to prevent duplicate processing.
+    - Fixed lesson loading bug (API response parsing: `data.get('lessons', [])`).
+  - **Markdown Rendering:**
+    - Added `markdown==3.5.2` dependency.
+    - Created `markdown_extras.py` template filter.
+    - AI answers now render with proper formatting (bold, italic, code blocks).
+    - JavaScript markdown renderer for real-time SSE streaming.
+    - Supports: `**bold**`, `*italic*`, `` `code` ``, ` ```code blocks``` `.
+  - **UI Improvements:**
+    - Increased window height to 700px.
+    - Session ID displayed in activity log on startup.
+    - Mode-specific logging messages.
+    - Better error handling and user feedback.
 - Phase 11-12 Document Ingestion Pipeline (2026-03-07):
   - **Backend (Phase 11):**
     - Added `source_type` field to Lesson model (recitation vs lesson).
