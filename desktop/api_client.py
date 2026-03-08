@@ -144,7 +144,8 @@ def fetch_lessons() -> list[dict]:
     )
     if not resp.ok:
         raise _response_error(resp)
-    return resp.json()
+    data = resp.json()
+    return data.get('lessons', [])
 
 
 def check_connection() -> bool:
