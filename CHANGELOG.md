@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 16.5 Question Detection Simplification (2026-03-09):
+  - **Bug Fix: Multiple-Choice Question Handling:**
+    - Desktop app was splitting OCR text into multiple sentences.
+    - Multiple-choice questions sent as separate questions (a., b., c. as individual questions).
+    - AI couldn't understand the full context.
+  - **Solution:**
+    - Simplified `detect_questions()` to return full OCR text as ONE question.
+    - Removed sentence splitting logic from `desktop/detector.py`.
+    - AI now receives complete screenshot context.
+  - **AI Prompt Updates:**
+    - Updated `backend/lessons/ai.py` to handle any text format.
+    - AI instructions now explicitly handle multiple-choice questions.
+    - Prompt: "If it's a multiple-choice question, identify the correct answer and explain why."
+  - **Benefits:**
+    - Multiple-choice questions work correctly.
+    - AI gets full context from each screenshot.
+    - Works with or without punctuation (Google Meet often omits `?`).
+    - Simpler code, fewer edge cases.
+    - One screenshot = One question (natural user expectation).
 - Phase 16 Desktop App Mode Selection & Lesson UI (2026-03-08):
   - **Mode Selection UI:**
     - Radio buttons for switching between Recitation and Lesson modes.

@@ -95,60 +95,39 @@ def looks_like_noise(text: str) -> bool:
 
 def detect_questions(text: str) -> list[str]:
     """
-    Extract all meaningful text from OCR for AI processing.
+    Return the full OCR text as a single question for AI processing.
     
-    NEW BEHAVIOR: Sends ALL non-noise text to backend, not just questions.
-    The backend AI will decide what to answer based on persona/description.
+    NEW BEHAVIOR: Sends the ENTIRE screenshot text as ONE question.
+    The AI is smart enough to understand:
+    - Multiple-choice questions (with a., b., c. options)
+    - Questions without '?' (Google Meet often omits punctuation)
+    - Statements that need explanation
+    - Any meaningful text from the screenshot
     
-    Examples that will be sent:
-    - Questions: "What is Python?", "How does this work?"
-    - Prompts: "Explain Python", "Describe photosynthesis"
-    - Single words: "photosynthesis", "mitosis"
-    - Math: "5 + 3", "1/4 x 1/5"
-    - Statements: Any meaningful text
+    Examples:
+    - "What is Python?" → ["What is Python?"]
+    - "What is X?\na. Option A\nb. Option B" → ["What is X?\na. Option A\nb. Option B"]
+    - "Explain photosynthesis" → ["Explain photosynthesis"]
+    - "photosynthesis" → ["photosynthesis"]
 
-    Returns a list of text segments to send to AI.
+    Returns a list with ONE item: the full cleaned text from the screenshot.
     """
     if not text or len(text) < 3:
         return []
 
-    prompts: list[str] = []
-    seen: set[str] = set()
-
-    cleaned = clean_transcript_text(text) or text
+    # Clean the text (remove URLs, UI noise, etc.)
+    cleaned = clean_transcript_text(text)
     
-    # If cleaned text is short (single word or phrase), send it as-is
-    if len(cleaned.split()) <= 5:
-        if not looks_like_noise(cleaned):
-            return [cleaned.strip()]
+    # If cleaning removed everything, check if original was noise
+    if not cleaned or len(cleaned) < 3:
+        if looks_like_noise(text):
+            return []
+        # Use original text if cleaning was too aggressive
+        cleaned = text.strip()
     
-    # For longer text, split into sentences and send each
-    sentences = _split_sentences(cleaned)
-
-    for sentence in sentences:
-        if _is_urlish(sentence):
-            continue
-        if not sentence or len(sentence) < 3:
-            continue
-            
-        # Send ALL sentences (no keyword filtering)
-        prompt = sentence.strip()
-        prompt_key = prompt.lower()
-        
-        if prompt_key not in seen:
-            seen.add(prompt_key)
-            prompts.append(prompt)
-
-    # Also detect math expressions and send them
-    for match in MATH_PATTERN.finditer(cleaned):
-        expr = " ".join(match.group(0).strip().split())
-        prompt = f"What is {expr}?"
-        prompt_key = prompt.lower()
-        if prompt_key not in seen:
-            seen.add(prompt_key)
-            prompts.append(prompt)
-
-    return prompts
+    # Return the FULL text as a single question
+    # The AI will understand the context and answer appropriately
+    return [cleaned]
 
 
 def has_questions(text: str) -> bool:

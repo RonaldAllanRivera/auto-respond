@@ -506,6 +506,68 @@ Use Django Admin as the primary CMS:
 - ✅ Fixed lesson loading bug (API response parsing)
 - ✅ Markdown rendering for AI answers
 
+---
+
+### Phase 16.5 — Question Detection Simplification ✅ COMPLETED
+**Goal:** Fix multiple-choice question handling by sending entire screenshot text as one question instead of splitting into multiple sentences.
+
+**Status:** ✅ Completed (Mar 9, 2026)
+
+**Problem:**
+- Desktop app was splitting OCR text into multiple sentences
+- Multiple-choice questions were sent as separate questions (a., b., c. as individual questions)
+- AI couldn't understand the full context
+- Google Meet often omits punctuation, breaking sentence detection
+
+**Solution:**
+- Simplified `detect_questions()` to return **full OCR text as ONE question**
+- Removed sentence splitting logic
+- AI now receives complete screenshot context
+- Updated AI prompt to handle any text format (questions, statements, multiple-choice)
+
+**Changes:**
+- `desktop/detector.py`: Simplified to return `[cleaned_text]` instead of splitting
+- `backend/lessons/ai.py`: Updated prompts to explicitly handle multiple-choice questions
+- AI instructions now: "If it's a multiple-choice question, identify the correct answer and explain why"
+
+**Benefits:**
+- ✅ Multiple-choice questions work correctly
+- ✅ AI gets full context from each screenshot
+- ✅ Works with or without punctuation
+- ✅ Simpler code, fewer edge cases
+- ✅ One screenshot = One question (natural user expectation)
+
+---
+
+### Phase 16.6 — Caption Deletion Feature 🚧 IN PROGRESS
+**Goal:** Allow users to delete individual transcript chunks (captions) to clean up accidental captures that pollute session context.
+
+**Status:** 🚧 In Progress (Mar 9, 2026)
+
+**Problem:**
+- Accidental screenshots add wrong data to transcript
+- Session context (last 10 captions) includes wrong data
+- No way to remove individual captions
+- Only option was to delete entire lesson
+
+**Solution:**
+- Add delete button (✕) next to each transcript chunk
+- Create `DELETE /api/chunks/<chunk_id>/` endpoint
+- Confirmation dialog to prevent accidental deletion
+- Immediate removal from session context
+
+**Implementation:**
+- Backend API: `api_chunk_delete()` in `lessons/api.py`
+- URL route: `/api/chunks/<int:chunk_id>/delete/`
+- Frontend: Delete button in `lesson_detail.html` transcript section
+- JavaScript: `deleteChunk()` function with confirmation
+
+**Benefits:**
+- ✅ Precise control - delete only wrong captures
+- ✅ Preserves good captions
+- ✅ Cleans session context for future questions
+- ✅ Simple UI - one button per chunk
+
 **Implementation Plan:**
 
 - **(desktop)** Add mode selector UI:

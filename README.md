@@ -67,9 +67,10 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - **Session-based Grouping**: Each app session creates a new lesson (unique session ID)
 - Device pairing (`POST /api/devices/pair/`) with revocation
 - Screenshot OCR ingestion + server-side dedupe
-- Question detection:
-  - WH-start questions (`what`, `where`, `when`, `how`, etc.)
-  - Math expressions (including fractions like `1/4 x 1/5`)
+- **Smart Question Detection**: Sends entire screenshot text as one question to AI
+  - Handles multiple-choice questions (a., b., c. options)
+  - Works with or without punctuation (Google Meet often omits `?`)
+  - AI understands any text format (questions, statements, prompts)
   - URL/UI noise filtering (e.g., `docs.google.com/.../edit?` is ignored)
 - Desktop paywall behavior: capture blocked while unpaired
 - Devices auto-revoke on `/devices/` when subscription is inactive

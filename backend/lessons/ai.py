@@ -38,9 +38,11 @@ def _build_prompt(question: str, context: str, max_sentences: int,
     if source_type == "lesson":
         # Lesson mode: Act as tutor explaining uploaded document content
         system_msg = (
-            f"You are a helpful tutor. Explain concepts from the lesson clearly and concisely "
-            f"in {max_sentences} sentence(s) or fewer. Base your answer on the lesson content provided. "
-            f"If the question involves a calculation, show the steps briefly."
+            f"You are a helpful tutor. The user will provide text from a screenshot. "
+            f"If it's a question, answer it clearly. If it's a multiple-choice question, "
+            f"identify the correct answer and explain why. If it's a statement or topic, "
+            f"provide a helpful explanation. Answer in {max_sentences} sentence(s) or fewer. "
+            f"Base your answer on the lesson content provided. If the question involves a calculation, show the steps briefly."
         )
     else:
         # Recitation mode: Use persona/description for homework help
@@ -55,7 +57,10 @@ def _build_prompt(question: str, context: str, max_sentences: int,
         
         # Add standard instructions
         system_msg += (
-            f"Answer the question clearly and concisely in {max_sentences} sentence(s) or fewer. "
+            f"The user will provide text from a screenshot. If it's a question, answer it. "
+            f"If it's a multiple-choice question, identify the correct answer and explain why. "
+            f"If it's a statement or topic, provide a helpful explanation. "
+            f"Answer in {max_sentences} sentence(s) or fewer. "
             f"If the question involves a calculation, show the steps briefly."
         )
 
@@ -66,13 +71,13 @@ def _build_prompt(question: str, context: str, max_sentences: int,
             # Lesson mode: Provide full lesson content as context
             user_msg = (
                 f"Lesson content:\n{context}\n\n"
-                f"Question: {question}"
+                f"Text from screenshot: {question}"
             )
         else:
             # Recitation mode: Provide recent captions as context
             user_msg = (
                 f"Recent captions:\n{context}\n\n"
-                f"Question: {question}"
+                f"Text from screenshot: {question}"
             )
 
     return [
