@@ -552,6 +552,35 @@ def api_lesson_delete(request: HttpRequest, lesson_id: int) -> JsonResponse:
 
 
 # ---------------------------------------------------------------------------
+# DELETE /api/chunks/<id>/ — Delete single transcript chunk
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@login_required
+def api_chunk_delete(request: HttpRequest, chunk_id: int) -> JsonResponse:
+    """
+    Delete a single transcript chunk (caption).
+    
+    This is useful for removing accidental captures that pollute session context.
+    
+    Response:
+        {"success": true, "deleted_id": 123}
+    """
+    chunk = get_object_or_404(TranscriptChunk, id=chunk_id, lesson__user=request.user)
+    
+    chunk_id_copy = chunk.id
+    chunk.delete()
+    
+    return JsonResponse({
+        'success': True,
+        'deleted_id': chunk_id_copy,
+        'message': 'Caption deleted successfully'
+    })
+
+
+# ---------------------------------------------------------------------------
 # POST /api/lessons/bulk-delete/ — Delete multiple lessons
 # ---------------------------------------------------------------------------
 

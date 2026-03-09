@@ -2,6 +2,7 @@ from django.urls import path
 
 from .api import (
     api_captions,
+    api_chunk_delete,
     api_lesson_delete,
     api_lessons_bulk_delete,
     api_lessons_list,
@@ -23,4 +24,5 @@ urlpatterns = [
     path("api/lessons/list/", api_lessons_list, name="api_lessons_list"),
     path("api/lessons/<int:lesson_id>/delete/", api_lesson_delete, name="api_lesson_delete"),
     path("api/lessons/bulk-delete/", api_lessons_bulk_delete, name="api_lessons_bulk_delete"),
+    path("api/chunks/<int:chunk_id>/delete/", api_chunk_delete, name="api_chunk_delete"),
 ]
