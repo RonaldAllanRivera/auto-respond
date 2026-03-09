@@ -384,6 +384,87 @@ def api_question_stream(request: HttpRequest, question_id: int) -> StreamingHttp
 
 
 # ---------------------------------------------------------------------------
+# GET /api/sessions/live/ — SSE stream for new questions (live dashboard)
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+def api_sessions_live(request: HttpRequest) -> StreamingHttpResponse:
+    """
+    SSE endpoint that streams new question events for the live dashboard.
+    
+    Listens for new questions created by desktop app and broadcasts them
+    to the live dashboard for real-time display.
+    
+    Query params:
+        mode: 'recitation' or 'lesson'
+        lesson_id: Required if mode='lesson'
+    
+    SSE events:
+        data: {"question_id": 123, "question_text": "...", "timestamp": "..."}
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required"}, status=401)
+    
+    from datetime import date
+    import time as time_module
+    
+    mode = request.GET.get('mode', 'recitation')
+    lesson_id = request.GET.get('lesson_id')
+    
+    def stream_new_questions():
+        """Poll for new questions and stream them as SSE events."""
+        last_check = time_module.time()
+        sent_ids = set()
+        
+        # Send heartbeat every 15 seconds to keep connection alive
+        while True:
+            # Determine which lesson to monitor
+            target_lesson = None
+            if mode == 'lesson' and lesson_id:
+                try:
+                    target_lesson = Lesson.objects.get(id=lesson_id, user=request.user)
+                except Lesson.DoesNotExist:
+                    yield f"data: {json.dumps({'error': 'lesson_not_found'})}\n\n"
+                    return
+            else:
+                # Recitation mode: Monitor today's session
+                today = date.today()
+                target_lesson = Lesson.objects.filter(
+                    user=request.user,
+                    source_type=Lesson.SOURCE_RECITATION,
+                    created_at__date=today
+                ).order_by('-created_at').first()
+            
+            if target_lesson:
+                # Get new questions since last check
+                new_qas = target_lesson.qas.filter(
+                    id__gt=max(sent_ids) if sent_ids else 0
+                ).order_by('created_at')
+                
+                for qa in new_qas:
+                    if qa.id not in sent_ids:
+                        sent_ids.add(qa.id)
+                        yield f"data: {json.dumps({
+                            'question_id': qa.id,
+                            'question_text': qa.question,
+                            'lesson_id': target_lesson.id,
+                            'timestamp': qa.created_at.isoformat()
+                        })}\n\n"
+            
+            # Heartbeat to keep connection alive
+            yield f": heartbeat\n\n"
+            
+            # Wait 2 seconds before next poll
+            time_module.sleep(2)
+    
+    response = StreamingHttpResponse(stream_new_questions(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
+
+
+# ---------------------------------------------------------------------------
 # POST /api/lessons/upload/ — Document upload (web dashboard only)
 # ---------------------------------------------------------------------------
 

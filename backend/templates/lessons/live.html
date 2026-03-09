@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .answer-streaming {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .markdown-content h1 { font-size: 1.5rem; font-weight: bold; margin-top: 1rem; margin-bottom: 0.5rem; }
+  .markdown-content h2 { font-size: 1.25rem; font-weight: bold; margin-top: 0.75rem; margin-bottom: 0.5rem; }
+  .markdown-content h3 { font-size: 1.1rem; font-weight: bold; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+  .markdown-content p { margin-bottom: 0.5rem; }
+  .markdown-content ul, .markdown-content ol { margin-left: 1.5rem; margin-bottom: 0.5rem; }
+  .markdown-content li { margin-bottom: 0.25rem; }
+  .markdown-content code { background-color: #f3f4f6; padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-family: monospace; }
+  .markdown-content pre { background-color: #f3f4f6; padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem; }
+  .markdown-content pre code { background-color: transparent; padding: 0; }
+  .markdown-content strong { font-weight: 600; }
+  .markdown-content em { font-style: italic; }
+</style>
+
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">Live Q&A</h1>
+      <p class="text-sm text-slate-600 mt-1">Real-time answers streaming from your Google Meet session</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <!-- Mode Selector -->
+      <div class="flex items-center gap-2">
+        <label class="text-sm font-medium text-slate-700">Mode:</label>
+        <select id="modeSelector" class="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+          <option value="recitation" {% if mode == 'recitation' %}selected{% endif %}>Recitation (Today)</option>
+          <option value="lesson" {% if mode == 'lesson' %}selected{% endif %}>Lesson</option>
+        </select>
+      </div>
+      
+      <!-- Lesson Selector (only shown in lesson mode) -->
+      <div id="lessonSelectorContainer" class="{% if mode != 'lesson' %}hidden{% endif %}">
+        <select id="lessonSelector" class="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+          <option value="">Select a lesson...</option>
+          {% for lesson in lessons %}
+            <option value="{{ lesson.id }}" {% if active_lesson and active_lesson.id == lesson.id %}selected{% endif %}>
+              {{ lesson.title|truncatechars:50 }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+    <!-- Session Info -->
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mb-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900" id="sessionTitle">
+            {% if active_lesson %}
+              {{ active_lesson.title }}
+            {% else %}
+              Waiting for questions...
+            {% endif %}
+          </h2>
+          <p class="text-sm text-slate-600 mt-1" id="sessionStatus">
+            <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+            Connected - Listening for new questions
+          </p>
+        </div>
+        <div class="text-right">
+          <p class="text-sm text-slate-600">Questions: <span id="questionCount" class="font-semibold text-slate-900">0</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Q&A Container -->
+    <div id="qaContainer" class="space-y-6">
+      {% if qas %}
+        {% for qa in qas %}
+          <div id="qa-{{ qa.id }}" class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div class="mb-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-indigo-600 mb-1">Question</p>
+                  <p class="text-base text-slate-900">{{ qa.question }}</p>
+                </div>
+                <span class="text-xs text-slate-500">{{ qa.created_at|date:"g:i A" }}</span>
+              </div>
+            </div>
+            <div class="border-t border-slate-100 pt-4">
+              <p class="text-sm font-medium text-slate-700 mb-2">Answer</p>
+              <div id="answer-{{ qa.id }}" class="text-sm text-slate-600 markdown-content">
+                {% if qa.answer %}
+                  {{ qa.answer|linebreaks }}
+                {% else %}
+                  <span class="inline-block answer-streaming">Thinking...</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <!-- Empty State -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
+          <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+          </svg>
+          <h3 class="mt-4 text-lg font-medium text-slate-900">No questions yet</h3>
+          <p class="mt-2 text-sm text-slate-600">
+            {% if mode == 'recitation' %}
+              Capture a Google Meet caption with your desktop app to get started.
+            {% else %}
+              Select a lesson above and capture a screenshot to ask questions.
+            {% endif %}
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+  <!-- Auto-scroll anchor -->
+  <div id="scrollAnchor"></div>
+</div>
+
+<script>
+    // Configuration
+    const mode = "{{ mode }}";
+    const lessonId = "{{ active_lesson.id|default:'' }}";
+    let questionCount = 0;
+    let activeStreams = new Map(); // Track active EventSource connections
+
+    // Mode selector handling
+    document.getElementById('modeSelector').addEventListener('change', (e) => {
+      const newMode = e.target.value;
+      if (newMode === 'lesson') {
+        document.getElementById('lessonSelectorContainer').classList.remove('hidden');
+      } else {
+        window.location.href = `/?mode=recitation`;
+      }
+    });
+
+    document.getElementById('lessonSelector').addEventListener('change', (e) => {
+      const selectedLessonId = e.target.value;
+      if (selectedLessonId) {
+        window.location.href = `/?mode=lesson&lesson_id=${selectedLessonId}`;
+      }
+    });
+
+    // Markdown rendering function
+    function renderMarkdown(text) {
+      return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+    }
+
+    // Add new question to UI
+    function addQuestion(questionId, questionText, timestamp) {
+      const container = document.getElementById('qaContainer');
+      
+      // Remove empty state if present
+      const emptyState = container.querySelector('.text-center');
+      if (emptyState) {
+        emptyState.remove();
+      }
+
+      // Create question element
+      const qaDiv = document.createElement('div');
+      qaDiv.id = `qa-${questionId}`;
+      qaDiv.className = 'bg-white rounded-lg shadow-sm border border-slate-200 p-6';
+      qaDiv.innerHTML = `
+        <div class="mb-4">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-indigo-600 mb-1">Question</p>
+              <p class="text-base text-slate-900">${questionText}</p>
+            </div>
+            <span class="text-xs text-slate-500">${new Date(timestamp).toLocaleTimeString()}</span>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-4">
+          <p class="text-sm font-medium text-slate-700 mb-2">Answer</p>
+          <div id="answer-${questionId}" class="text-sm text-slate-600 markdown-content answer-streaming">
+            <span class="inline-block">Thinking...</span>
+          </div>
+        </div>
+      `;
+      
+      // Prepend new question at the top (latest first)
+      container.insertBefore(qaDiv, container.firstChild);
+      questionCount++;
+      document.getElementById('questionCount').textContent = questionCount;
+      
+      // Auto-scroll to top to show latest question
+      qaDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      // Start streaming answer
+      streamAnswer(questionId);
+    }
+
+    // Stream answer for a question
+    function streamAnswer(questionId) {
+      const answerDiv = document.getElementById(`answer-${questionId}`);
+      if (!answerDiv) return;
+      
+      let fullAnswer = '';
+      
+      const eventSource = new EventSource(`/api/questions/${questionId}/stream/`);
+      activeStreams.set(questionId, eventSource);
+      
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.error) {
+          answerDiv.innerHTML = `<span class="text-red-600">Error: ${data.error}</span>`;
+          answerDiv.classList.remove('answer-streaming');
+          eventSource.close();
+          activeStreams.delete(questionId);
+          return;
+        }
+        
+        if (data.done) {
+          // Streaming complete
+          answerDiv.classList.remove('answer-streaming');
+          answerDiv.innerHTML = renderMarkdown(fullAnswer);
+          eventSource.close();
+          activeStreams.delete(questionId);
+        } else {
+          // Append token
+          fullAnswer += data.token;
+          answerDiv.innerHTML = renderMarkdown(fullAnswer) + '<span class="inline-block w-1 h-4 bg-indigo-600 ml-1 animate-pulse"></span>';
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('Answer stream error:', error);
+        answerDiv.innerHTML = '<span class="text-red-600">Connection error. Please refresh the page.</span>';
+        answerDiv.classList.remove('answer-streaming');
+        eventSource.close();
+        activeStreams.delete(questionId);
+      };
+    }
+
+    // Initialize: Count existing questions and start streaming for unanswered ones
+    document.addEventListener('DOMContentLoaded', () => {
+      const existingQAs = document.querySelectorAll('[id^="qa-"]');
+      questionCount = existingQAs.length;
+      document.getElementById('questionCount').textContent = questionCount;
+      
+      // Stream answers for questions that are still "Thinking..."
+      existingQAs.forEach(qaDiv => {
+        const questionId = qaDiv.id.replace('qa-', '');
+        const answerDiv = document.getElementById(`answer-${questionId}`);
+        if (answerDiv && answerDiv.classList.contains('answer-streaming')) {
+          streamAnswer(questionId);
+        }
+      });
+    });
+
+    // Auto-reload page every 5 seconds to check for new questions
+    setTimeout(() => {
+      location.reload();
+    }, 5000);
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      activeStreams.forEach(stream => stream.close());
+    });
+</script>
+{% endblock %}

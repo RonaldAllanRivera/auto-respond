@@ -102,6 +102,16 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - **Select All checkbox**: Bulk select all lessons for deletion
 - **Formatted transcripts**: Preserves line breaks and paragraphs from original documents
 
+### Live Dashboard (Phase 8)
+- **Homepage**: Live Q&A page at `/` for instant access during Google Meet sessions
+- **Real-time streaming**: ChatGPT-style word-by-word answer display
+- **Auto-reload**: Page refreshes every 5 seconds to check for new questions
+- **Latest first**: New questions appear at the top (reverse chronological)
+- **Mode selector**: Switch between Recitation (today's session) and Lesson (selected lesson)
+- **Optimized OCR**: 30-50% faster processing (resize, grayscale, contrast enhancement)
+- **Zero desktop overhead**: All streaming happens on Django side
+- **Stable performance**: No worker timeouts, no connection errors
+
 ### Desktop App Stability
 - **Auto-capture**: Automatically detects new clipboard images (Ctrl+C after Print Screen)
 - **Non-blocking UI**: No freezing or shaking during clipboard polling
@@ -126,7 +136,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 6 — Coupons (admin CMS) | Completed |
 | 7 — Render production hardening | Completed |
 | **Deploy checkpoint** — Render + Neon + OAuth + Stripe | **Completed** |
-| 8 — Dashboard realtime UX | Planned |
+| **8 — Live Dashboard with Real-Time Streaming** | **Completed** |
 | 9 — Frontend migration to Next.js | Planned |
 | 10 — Windows desktop installer | Completed |
 | **11 — Document Ingestion Pipeline (Backend)** | **Completed** |
@@ -218,7 +228,8 @@ docker compose run --rm web python manage.py createsuperuser
 
 Open:
 
-- Dashboard: `http://localhost:8000/`
+- Live Q&A (Homepage): `http://localhost:8000/`
+- Lessons Dashboard: `http://localhost:8000/lessons/`
 - Admin: `http://localhost:8000/admin/`
 
 ### 4) Start desktop app

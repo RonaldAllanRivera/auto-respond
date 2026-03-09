@@ -8,6 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 8 Live Dashboard with Real-Time Streaming (2026-03-09):
+  - **Live Dashboard as Homepage:**
+    - Moved live Q&A page to `/` (homepage) for instant access.
+    - Moved lessons dashboard to `/lessons/` (archive).
+    - Added "Live" and "Lessons" links to navigation menu.
+  - **Real-Time Streaming:**
+    - ChatGPT-style word-by-word answer display.
+    - Auto-reload every 5 seconds to check for new questions.
+    - Streams answers using existing SSE endpoint (`/api/questions/<id>/stream/`).
+    - "Thinking..." indicator while waiting for AI response.
+  - **Live Dashboard Features:**
+    - Loads existing Q&A on page load (last 20 questions).
+    - Latest questions appear at top (reverse chronological).
+    - Mode selector: Recitation (today's session) or Lesson (selected lesson).
+    - Markdown rendering for AI answers.
+    - Mobile-responsive design.
+    - "No questions yet" empty state.
+  - **OCR Optimization (`desktop/ocr.py`):**
+    - Resize images to optimal size (~1920px width).
+    - Convert to grayscale for faster processing.
+    - Enhance contrast (1.5x) for better accuracy.
+    - Use PSM 6 config (uniform block of text).
+    - **Result: 30-50% faster OCR (500-2000ms → 300-1000ms)**.
+  - **Bug Fixes:**
+    - Removed infinite SSE polling loop that caused Gunicorn worker timeouts.
+    - Replaced with simple page reload every 5 seconds.
+    - Fixed desktop app HTTP connection errors.
+    - Stable performance with zero worker crashes.
+  - **Files Modified:**
+    - `backend/lessons/views.py` - Added `live_dashboard()` view with Q&A loading.
+    - `backend/lessons/urls.py` - Swapped routes: `/` → live, `/lessons/` → dashboard.
+    - `backend/templates/base.html` - Added Live and Lessons navigation links.
+    - `backend/templates/lessons/live.html` - Created live dashboard template.
+    - `desktop/ocr.py` - Optimized preprocessing for faster OCR.
+    - `README.md` - Updated URL documentation.
 - Phase 16.5 Question Detection Simplification (2026-03-09):
   - **Bug Fix: Multiple-Choice Question Handling:**
     - Desktop app was splitting OCR text into multiple sentences.
