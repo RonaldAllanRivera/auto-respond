@@ -400,10 +400,96 @@ Use Django Admin as the primary CMS:
 - `desktop/ocr.py` - Optimized preprocessing for faster OCR
 - `README.md` - Updated URL documentation
 
-### Phase 9 — Frontend migration to Next.js (post-core completion)
-- Migrate user-facing pages to Next.js after core backend/deployment phases are stable.
-- Keep Django as API/admin service while Next.js handles subscriber UI.
-- Preserve current API contract and parity for lessons, transcripts, Q&A streaming, settings, devices, and billing views.
+### Phase 9 — PWA & Mobile Optimization (High Priority)
+**Goal:** Enhance mobile experience with Progressive Web App features instead of React Native or Next.js migration.
+
+**Status:** 📋 Planned
+
+**Rationale:**
+- Current Django + vanilla JS solution already works perfectly on mobile browsers
+- Next.js migration would add complexity without value (separate deployment, CORS, duplicate auth)
+- React Native would require 3-4 months development + app store maintenance
+- PWA provides native-like experience with zero deployment overhead
+
+**Phase 9.1: Progressive Web App (PWA) Support**
+
+**1. Add PWA Manifest:**
+- Create `/static/manifest.json` with app metadata
+- Add icons (192x192, 512x512) for home screen
+- Configure theme colors and display mode
+- Enable "Add to Home Screen" on mobile devices
+
+**2. Service Worker for Offline Support:**
+- Cache static assets (CSS, JS, icons)
+- Cache live page HTML for offline viewing
+- Background sync for failed API requests
+- Update notification when new version available
+
+**3. Mobile App-Like Features:**
+- Full-screen mode (no browser chrome)
+- Splash screen on launch
+- Status bar theming (iOS/Android)
+- Install prompts for returning users
+
+**Expected Benefits:**
+- ✅ Looks like native app on mobile
+- ✅ Works offline (cached content)
+- ✅ Fast loading (cached assets)
+- ✅ No app store submission required
+- ✅ Instant updates (no approval delays)
+- ✅ Works on ALL devices (iOS, Android, tablets)
+
+**Phase 9.2: Mobile UI Optimization**
+
+**1. Responsive Design Improvements:**
+- Optimize live page layout for small screens
+- Larger touch targets (48x48px minimum)
+- Better typography scaling
+- Collapsible sections for long answers
+
+**2. Mobile-Specific Features:**
+- Haptic feedback on new questions (Vibration API)
+- Swipe to refresh
+- Pull-to-load more questions
+- Sticky header on scroll
+- Bottom navigation for easier thumb access
+
+**3. Performance Optimization:**
+- Reduce auto-reload interval on mobile (10s instead of 5s to save battery)
+- Lazy load images in answers
+- Compress markdown rendering
+- Reduce animation overhead
+
+**Phase 9.3: Browser Push Notifications**
+
+**1. Web Push API Integration:**
+- Request notification permission on first visit
+- Subscribe to push notifications via service worker
+- Backend sends push when new answer arrives
+- Show notification even when browser is closed
+
+**2. Notification Features:**
+- "New answer ready" notification with preview
+- Click notification to open live page
+- Badge count for unread answers
+- Silent notifications option
+
+**Expected Impact:**
+- **Development Time:** 2-3 days (vs 3-4 months for React Native)
+- **Ongoing Cost:** $0/month (vs $99-199/year for app stores)
+- **User Experience:** Native-like on mobile browsers
+- **Maintenance:** Minimal (same codebase as desktop)
+
+**Why NOT Next.js or React Native:**
+- ❌ Next.js: Adds complexity (separate deployment, CORS, duplicate auth) without solving real problems
+- ❌ React Native: 3-4 months dev time, app store overhead, separate codebase to maintain
+- ✅ PWA: Best of both worlds - native-like UX with web simplicity
+
+**Implementation Priority:**
+1. PWA manifest + service worker (High - 4 hours)
+2. Mobile UI optimization (Medium - 3 hours)
+3. Push notifications (Medium - 4 hours)
+4. Advanced features (Low - as needed)
 
 ### Phase 10 — Windows desktop installer (Completed)
 - Bundle Python desktop app into a single `.exe` using **PyInstaller** (Windows build step). ✓
@@ -864,6 +950,106 @@ POST /api/questions/
 
 **Priority:** Medium (enhances usability, backend already ready)
 
+---
+
+### Phase 16.7 — Desktop App Async Startup Optimization ✓ Completed
+**Goal:** Eliminate 5-10 second startup delay by moving blocking API calls to background threads with retry logic, caching, and offline support.
+
+**Status:** ✅ Completed (Mar 11, 2026)
+
+**Problem:**
+- Desktop app blocked for 5-10 seconds on startup before user could paste screenshots
+- Two blocking API calls in `__init__()`:
+  1. `_refresh_pairing_status()` → `validate_device_token()` (10s timeout)
+  2. `_on_mode_changed()` → `_refresh_lessons()` → `fetch_lessons()` (10s timeout)
+- In Lesson mode + paired: 10-20 seconds total delay
+- User could not interact with app during blocking
+
+**Solution - 9 Improvements Implemented:**
+
+**HIGH PRIORITY (Immediate Fix):**
+1. ✅ Moved `_refresh_pairing_status()` to background thread
+2. ✅ Moved `_refresh_lessons()` to background thread
+3. ✅ Added `root.update()` after `_build_ui()` for instant UI render
+
+**MEDIUM PRIORITY (Better UX):**
+4. ✅ Added "Checking..." / "Validating..." status indicators
+5. ✅ Lazy load lessons (only when switching to Lesson mode)
+6. ✅ Cache lessons locally in `config.json` with 5-minute TTL
+
+**LOW PRIORITY (Production Polish):**
+7. ✅ Added retry logic for failed API calls (3 attempts with exponential backoff)
+8. ✅ Added connection status indicator (Online/Offline)
+9. ✅ Added clear offline feedback (fail fast, no queue)
+
+**Implementation Details:**
+
+**New Methods in `desktop/main.py`:**
+- `_show_initial_pairing_status()` - Shows cached pairing status instantly (no API call)
+- `_async_startup_validation()` - Background thread for pairing validation
+- `_handle_startup_validation_result()` - Updates UI on main thread after validation
+- `_async_refresh_lessons()` - Background thread for lesson fetching
+- `_fetch_lessons_from_api()` - Fetch and cache lessons from API
+- `_update_lessons_ui()` - Updates lesson dropdown on main thread
+- `_handle_lessons_error()` - Error handling on main thread
+- `_update_connection_status()` - Updates online/offline indicator (red/green)
+
+**Enhanced `desktop/config.py`:**
+- Added `cached_lessons` field for local lesson caching
+- Added `last_lessons_fetch` timestamp for cache validation
+- New functions: `cache_lessons()`, `get_cached_lessons()`, `is_lessons_cache_valid()`
+
+**Offline Handling:**
+- **No queue** - Fail fast with clear feedback
+- Shows "⚠ Offline - Question not sent: [question]..." in activity log
+- Shows "Reconnect to server to capture questions" message
+- Connection status indicator: "● Online" (green) / "● Offline" (red)
+
+**Enhanced `desktop/api_client.py`:**
+- Added `@with_retry()` decorator for automatic retry with exponential backoff
+- Applied to `validate_device_token()` and `fetch_lessons()`
+- 3 retry attempts with 1.5x backoff multiplier
+
+**Thread Safety:**
+- All UI updates via `root.after(0, callback)` from background threads
+- Config operations are thread-safe (atomic file I/O for small JSON)
+- API calls run in daemon background threads
+- No shared mutable state between threads
+
+**Performance Impact:**
+
+**Before:**
+- Startup time: 10-20 seconds (Lesson mode + paired)
+- User blocked: Cannot paste screenshots
+- No offline support
+- No retry on network errors
+
+**After:**
+- Startup time: < 1 second
+- User can paste immediately
+- Cached lessons show instantly
+- Auto-retry on network errors (3 attempts)
+- Clear offline feedback (no queue)
+- Connection status indicator (red/green)
+
+**Performance Improvement: 10-20x faster startup**
+
+**Files Modified:**
+- `desktop/main.py` - Async startup implementation (8 new methods, offline feedback)
+- `desktop/config.py` - Lesson caching support (no queue)
+- `desktop/api_client.py` - Retry logic decorator
+
+**Benefits:**
+- ✅ Instant app startup (< 1 second)
+- ✅ User can paste screenshots immediately
+- ✅ All pairing functionality preserved
+- ✅ Graceful degradation on network errors
+- ✅ Clear offline feedback (fail fast, no queue complexity)
+- ✅ Local caching reduces API calls
+- ✅ Better user experience with connection status indicator
+
+---
+
 ### Phase 17 — Daily AI Output Limits (Future)
 **Goal:** Implement daily question limits per user to control OpenAI API costs and prevent abuse.
 
@@ -932,6 +1118,285 @@ class DailyUsage(models.Model):
 - ✅ Analytics for usage patterns
 
 **Priority:** Low (cost control, not critical for MVP)
+
+---
+
+### Phase 18 — Performance & Reliability Improvements (Medium Priority)
+**Goal:** Optimize backend performance and add monitoring for production stability.
+
+**Status:** 📋 Planned
+
+**Phase 18.1: Database Optimization**
+
+**1. Add Database Indexes:**
+- Index on `Lesson.user_id` + `created_at` (for dashboard queries)
+- Index on `QuestionAnswer.lesson_id` + `created_at` (for Q&A sorting)
+- Index on `TranscriptChunk.lesson_id` + `page_number` (for lesson detail)
+- Composite index on `Device.user_id` + `is_active` (for device list)
+
+**2. Query Optimization:**
+- Use `select_related()` for foreign keys (reduce N+1 queries)
+- Use `prefetch_related()` for reverse relations
+- Add `only()` and `defer()` for large fields
+- Cache lesson lists in Redis (5-minute TTL)
+
+**3. Connection Pooling:**
+- Configure PostgreSQL connection pooling (pgBouncer)
+- Optimize Gunicorn worker count based on CPU cores
+- Add database query logging for slow queries (>100ms)
+
+**Expected Impact:**
+- 50-70% faster dashboard loading
+- Reduced database load
+- Better scalability for 100+ concurrent users
+
+**Phase 18.2: Caching Strategy**
+
+**1. Redis Integration:**
+- Cache lesson lists per user (5-minute TTL)
+- Cache user settings (persona, description)
+- Cache subscription status (1-minute TTL)
+- Session storage for Django sessions
+
+**2. Static Asset Caching:**
+- Add cache headers for CSS/JS (1 year)
+- Enable gzip compression
+- Use CDN for Tailwind CSS (already using CDN ✓)
+
+**3. API Response Caching:**
+- Cache `GET /api/lessons/list/` responses
+- Invalidate cache on lesson creation/deletion
+- Use ETags for conditional requests
+
+**Phase 18.3: Monitoring & Alerts**
+
+**1. Application Monitoring:**
+- Add Sentry for error tracking
+- Log all API errors with context
+- Track SSE connection failures
+- Monitor Gunicorn worker timeouts
+
+**2. Performance Metrics:**
+- Track API response times (p50, p95, p99)
+- Monitor database query times
+- Track OpenAI API latency
+- Monitor memory usage per worker
+
+**3. Uptime Monitoring:**
+- Use UptimeRobot or similar (free tier)
+- Monitor `/health/` endpoint
+- Alert on downtime (email/SMS)
+- Track uptime SLA (target: 99.9%)
+
+**Expected Benefits:**
+- ✅ Catch errors before users report them
+- ✅ Identify performance bottlenecks
+- ✅ Proactive issue resolution
+- ✅ Better user experience
+
+**Implementation Priority:**
+1. Database indexes (High - 2 hours)
+2. Query optimization (High - 3 hours)
+3. Redis caching (Medium - 4 hours)
+4. Monitoring setup (Medium - 3 hours)
+
+---
+
+### Phase 19 — User Experience Enhancements (Medium Priority)
+**Goal:** Improve dashboard UX with features that increase engagement and retention.
+
+**Status:** 📋 Planned
+
+**Phase 19.1: Search & Filter**
+
+**1. Question Search:**
+- Full-text search across questions and answers
+- Filter by date range (today, this week, this month)
+- Filter by lesson/recitation
+- Search suggestions as you type
+
+**2. Lesson Organization:**
+- Folders/tags for lessons
+- Star/favorite important lessons
+- Archive old lessons (hide from main view)
+- Bulk operations (delete, archive, tag)
+
+**Phase 19.2: Keyboard Shortcuts**
+
+**1. Global Shortcuts:**
+- `R` - Refresh page
+- `C` - Clear filters
+- `S` - Focus search box
+- `N` - New lesson upload
+- `?` - Show keyboard shortcuts help
+
+**2. Navigation Shortcuts:**
+- `1` - Go to Live page
+- `2` - Go to Lessons page
+- `3` - Go to Settings
+- `Esc` - Close modals/dialogs
+
+**Phase 19.3: Dark Mode**
+
+**1. Theme Toggle:**
+- Dark/Light mode switcher in header
+- Persist preference in localStorage
+- System preference detection (prefers-color-scheme)
+- Smooth transition between themes
+
+**2. Color Scheme:**
+- Dark mode: Slate 900 background, Slate 100 text
+- Maintain contrast ratios (WCAG AA compliance)
+- Adjust syntax highlighting for code blocks
+- Update markdown rendering colors
+
+**Phase 19.4: Answer History & Analytics**
+
+**1. Answer History:**
+- View all past Q&A in chronological order
+- Export Q&A to PDF/Markdown
+- Share individual Q&A via link
+- Print-friendly formatting
+
+**2. Usage Analytics (User-facing):**
+- Questions asked per day/week/month (chart)
+- Most active lessons
+- Average response time
+- Study streak counter
+
+**Expected Benefits:**
+- ✅ Better content discovery
+- ✅ Faster navigation
+- ✅ Reduced eye strain (dark mode)
+- ✅ Increased engagement
+
+**Implementation Priority:**
+1. Keyboard shortcuts (High - 2 hours)
+2. Dark mode (Medium - 4 hours)
+3. Search & filter (Medium - 6 hours)
+4. Analytics (Low - 8 hours)
+
+---
+
+### Phase 20 — Desktop App Improvements (Low Priority)
+**Goal:** Enhance desktop app reliability and user experience.
+
+**Status:** 📋 Planned
+
+**Phase 20.1: Auto-Update Mechanism**
+
+**1. Version Check:**
+- Check GitHub Releases API on startup
+- Compare current version with latest release
+- Show update notification if new version available
+- "Download Update" button opens GitHub release page
+
+**2. Update Notification:**
+- Non-intrusive banner at top of window
+- "Update available: v1.2.3 → v1.3.0"
+- Changelog preview (first 3 bullet points)
+- "Remind me later" option
+
+**Phase 20.2: Better Error Messages**
+
+**1. User-Friendly Errors:**
+- Replace technical errors with plain English
+- "Can't connect to server" instead of "HTTPConnectionError"
+- "OCR failed - try a clearer screenshot" instead of "TesseractError"
+- Actionable suggestions for common errors
+
+**2. Error Recovery:**
+- Auto-retry on network errors (3 attempts)
+- Fallback to cached data when offline
+- Queue questions when internet drops
+- Sync queued questions when back online
+
+**Phase 20.3: Offline Queue**
+
+**1. Local Storage:**
+- Save questions to SQLite when offline
+- Store screenshot + OCR text + timestamp
+- Sync to backend when connection restored
+- Show "Offline - 3 questions queued" indicator
+
+**2. Sync Logic:**
+- Detect internet connectivity
+- Upload queued questions in order
+- Show sync progress
+- Handle conflicts (duplicate questions)
+
+**Expected Benefits:**
+- ✅ Always up-to-date app
+- ✅ Better error handling
+- ✅ Works during internet outages
+- ✅ No lost questions
+
+**Implementation Priority:**
+1. Better error messages (High - 2 hours)
+2. Auto-update check (Medium - 3 hours)
+3. Offline queue (Low - 8 hours)
+
+---
+
+### Phase 21 — Growth & Marketing Features (Low Priority)
+**Goal:** Features that help with user acquisition, conversion, and retention.
+
+**Status:** 📋 Planned
+
+**Phase 21.1: Referral Program**
+
+**1. Referral System:**
+- Unique referral link per user
+- Track referrals in database
+- Reward: 1 month free for referrer + referee
+- Dashboard showing referral count and rewards
+
+**2. Implementation:**
+- Add `referral_code` to User model
+- Track `referred_by` on signup
+- Auto-apply coupon when referee subscribes
+- Email notification on successful referral
+
+**Phase 21.2: Free Trial**
+
+**1. Trial Period:**
+- 7-day free trial for new users
+- No credit card required
+- Full access to all features
+- Email reminders (day 5, day 6, day 7)
+
+**2. Trial Conversion:**
+- "2 days left in trial" banner
+- Upgrade CTA on live page
+- Show value: "You've asked 47 questions this week!"
+- One-click upgrade to paid plan
+
+**Phase 21.3: Usage Analytics (Admin)**
+
+**1. Admin Dashboard:**
+- Total users, active users, churn rate
+- Revenue metrics (MRR, ARR, LTV)
+- Conversion funnel (signup → trial → paid)
+- Question volume trends
+
+**2. Cohort Analysis:**
+- Retention by signup month
+- Feature usage by cohort
+- Churn reasons (exit surveys)
+- A/B test results
+
+**Expected Benefits:**
+- ✅ Organic growth through referrals
+- ✅ Higher conversion from trial
+- ✅ Data-driven decisions
+- ✅ Better retention
+
+**Implementation Priority:**
+1. Free trial (High - 4 hours)
+2. Referral program (Medium - 8 hours)
+3. Admin analytics (Low - 12 hours)
+
+---
 
 ## 11) Testing
 

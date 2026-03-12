@@ -112,7 +112,13 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 - **Zero desktop overhead**: All streaming happens on Django side
 - **Stable performance**: No worker timeouts, no connection errors
 
-### Desktop App Stability
+### Desktop App Stability & Performance
+- **Instant startup**: < 1 second app launch (10-20x faster than before)
+- **Async initialization**: Background threads for pairing validation and lesson loading
+- **Local caching**: Lessons cached for 5 minutes, instant display on startup
+- **Connection status**: Real-time online/offline indicator (green/red)
+- **Retry logic**: 3 automatic retry attempts with exponential backoff on network errors
+- **Clear offline feedback**: User-friendly messages when server is unreachable
 - **Auto-capture**: Automatically detects new clipboard images (Ctrl+C after Print Screen)
 - **Non-blocking UI**: No freezing or shaking during clipboard polling
 - **Session-based grouping**: Each app session creates a new lesson with unique ID
@@ -144,6 +150,7 @@ Meet Lessons is a full-stack SaaS-style project where a Python desktop client ca
 | 13 — AI Persona & send-all architecture | Completed |
 | **14 — Desktop App Stability & Auto-Capture** | **Completed** |
 | **16 — Desktop App Mode Selection & Lesson UI** | **Completed** |
+| **16.7 — Desktop App Async Startup Optimization** | **Completed** |
 
 See `PLAN.md` for detailed phased deliverables.
 

@@ -39,6 +39,8 @@ DEFAULTS = {
     "device_token": "",
     "device_id": "",
     "hotkey": "print_screen",
+    "cached_lessons": [],  # Phase 16.7: Cache lessons locally
+    "last_lessons_fetch": None,  # Phase 16.7: Cache timestamp
 }
 
 
@@ -87,3 +89,36 @@ def clear_device():
 def is_paired() -> bool:
     data = load()
     return bool(data.get("device_token"))
+
+
+# Phase 16.7: Lesson caching functions
+def cache_lessons(lessons: list):
+    """Cache lessons locally with timestamp."""
+    from datetime import datetime
+    data = load()
+    data["cached_lessons"] = lessons
+    data["last_lessons_fetch"] = datetime.now().isoformat()
+    save(data)
+
+
+def get_cached_lessons() -> list:
+    """Get cached lessons."""
+    data = load()
+    return data.get("cached_lessons", [])
+
+
+def is_lessons_cache_valid(max_age_seconds: int = 300) -> bool:
+    """Check if cached lessons are still valid (default: 5 minutes)."""
+    data = load()
+    last_fetch = data.get("last_lessons_fetch")
+    if not last_fetch:
+        return False
+    try:
+        from datetime import datetime
+        fetch_time = datetime.fromisoformat(last_fetch)
+        age = (datetime.now() - fetch_time).total_seconds()
+        return age < max_age_seconds
+    except:
+        return False
+
+

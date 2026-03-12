@@ -68,15 +68,26 @@ class MeetLessonsApp:
         
         # Track images being processed by Print Screen to prevent duplicate processing
         self._print_screen_processing_sig = None
+        
+        # Phase 16.7: Connection status tracking
+        self._is_online = True
+        self._connection_check_job = None
 
         self._build_ui()
-        self._refresh_pairing_status()
+        self.root.update()  # Phase 16.7: Force UI render immediately
+        
+        # Phase 16.7: Show cached pairing status immediately (no API call)
+        self._show_initial_pairing_status()
+        
+        # Phase 16.7: Validate pairing in background
+        threading.Thread(target=self._async_startup_validation, daemon=True).start()
+        
         self._start_pairing_revalidation()
         self._start_hotkey_listener()
         self._start_clipboard_watcher()
         
-        # Phase 16: Initialize mode UI state
-        self._on_mode_changed()
+        # Phase 16.7: Defer mode initialization (lazy load lessons)
+        self.root.after(100, self._on_mode_changed)
 
     # ------------------------------------------------------------------ UI
     # ------------------------------------------------------------------ UI
@@ -157,6 +168,19 @@ class MeetLessonsApp:
         self.capture_btn = ttk.Button(capture_frame, text="Capture Now (Manual)", command=self._manual_capture,
                                       state=tk.DISABLED)
         self.capture_btn.pack(anchor=tk.W, pady=(6, 0))
+
+        # ---- Connection Status (Phase 16.7) ----
+        status_frame = ttk.Frame(main)
+        status_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        self.connection_status_var = tk.StringVar(value="● Checking connection...")
+        self.connection_label = ttk.Label(
+            status_frame,
+            textvariable=self.connection_status_var,
+            font=("TkDefaultFont", 8),
+            foreground="gray"
+        )
+        self.connection_label.pack(anchor=tk.W)
 
         # ---- Activity Log ----
         log_frame = ttk.LabelFrame(main, text="Activity Log", padding=8)
@@ -324,14 +348,149 @@ class MeetLessonsApp:
             valid, reason = api_client.validate_device_token()
             if not valid and self._is_backend_auth_failure_reason(reason):
                 self.root.after(0, self._refresh_pairing_status)
-        except Exception:
-            pass
+            
+            # Update connection status based on validation result
+            if not valid and ("Connection" in reason or "Timeout" in reason or "Failed to establish" in reason):
+                self.root.after(0, lambda: self._update_connection_status(False, reason))
+            else:
+                self.root.after(0, lambda: self._update_connection_status(True))
+        except Exception as e:
+            self.root.after(0, lambda: self._update_connection_status(False, str(e)))
         finally:
             self.root.after(0, self._finish_pairing_revalidation)
 
     def _finish_pairing_revalidation(self):
         self._pairing_revalidate_running = False
         self._schedule_pairing_revalidation()
+
+    # ------------------------------------------------------------------ Async Startup (Phase 16.7)
+
+    def _show_initial_pairing_status(self):
+        """Show cached pairing status immediately (no API call)."""
+        if config.is_paired():
+            device_id = config.get("device_id", "")
+            short_id = device_id[:8] if device_id else "?"
+            self.pair_status_var.set(f"✓ Paired (device {short_id}...) - Validating...")
+            self.code_entry.configure(state=tk.DISABLED)
+            self.pair_btn.configure(state=tk.DISABLED)
+            self.unpair_btn.configure(state=tk.NORMAL)
+            self.capture_btn.configure(state=tk.NORMAL)
+            self.capture_status_var.set("Press Print Screen to capture")
+        else:
+            self.pair_status_var.set("Not paired — enter a pairing code from the dashboard")
+            self.code_entry.configure(state=tk.NORMAL)
+            self.pair_btn.configure(state=tk.NORMAL)
+            self.unpair_btn.configure(state=tk.DISABLED)
+            self.capture_btn.configure(state=tk.DISABLED)
+            self.capture_status_var.set("Pair device to enable capture")
+
+    def _async_startup_validation(self):
+        """Background thread for startup pairing validation."""
+        if not config.is_paired():
+            self.root.after(0, lambda: self._update_connection_status(True))
+            return
+        
+        try:
+            valid, reason = api_client.validate_device_token()
+            self.root.after(0, lambda: self._handle_startup_validation_result(valid, reason))
+            
+            # Check if validation failed due to connection error
+            if not valid and ("Connection" in reason or "Timeout" in reason or "Failed to establish" in reason):
+                self.root.after(0, lambda: self._update_connection_status(False, reason))
+            else:
+                self.root.after(0, lambda: self._update_connection_status(True))
+        except Exception as e:
+            self.root.after(0, lambda: self._update_connection_status(False, str(e)))
+
+    def _handle_startup_validation_result(self, valid: bool, reason: str):
+        """Handle validation result on main thread."""
+        if not valid and self._is_backend_auth_failure_reason(reason):
+            config.clear_device()
+            self.pair_status_var.set("Not paired — enter a pairing code from the dashboard")
+            self.code_entry.configure(state=tk.NORMAL)
+            self.pair_btn.configure(state=tk.NORMAL)
+            self.unpair_btn.configure(state=tk.DISABLED)
+            self.capture_btn.configure(state=tk.DISABLED)
+            self.capture_status_var.set("Pair device to enable capture")
+            self._log(f"Pairing cleared by backend policy ({reason}). Subscribe and pair again if needed.")
+        else:
+            device_id = config.get("device_id", "")
+            short_id = device_id[:8] if device_id else "?"
+            self.pair_status_var.set(f"✓ Paired (device {short_id}...)")
+            if not valid:
+                self._log(f"Pairing validation warning: {reason} (will retry)")
+
+    def _update_connection_status(self, is_online: bool, error_msg: str = ""):
+        """Update connection status indicator."""
+        self._is_online = is_online
+        if is_online:
+            self.connection_status_var.set("● Online")
+            self.connection_label.configure(foreground="green")
+        else:
+            self.connection_status_var.set("● Offline")
+            self.connection_label.configure(foreground="red")
+
+    def _async_refresh_lessons(self):
+        """Background thread for fetching lessons."""
+        if not config.is_paired():
+            self.root.after(0, lambda: self._log("Not paired - pair device first to load lessons"))
+            return
+        
+        # Check cache first
+        if config.is_lessons_cache_valid():
+            cached = config.get_cached_lessons()
+            if cached:
+                self.root.after(0, lambda: self._update_lessons_ui(cached, from_cache=True))
+                # Refresh in background
+                threading.Thread(target=self._fetch_lessons_from_api, daemon=True).start()
+                return
+        
+        # No valid cache, fetch from API
+        self._fetch_lessons_from_api()
+
+    def _fetch_lessons_from_api(self):
+        """Fetch lessons from API and update cache."""
+        try:
+            lessons = api_client.fetch_lessons()
+            config.cache_lessons(lessons)
+            self.root.after(0, lambda: self._update_lessons_ui(lessons, from_cache=False))
+            self.root.after(0, lambda: self._update_connection_status(True))
+        except Exception as e:
+            self.root.after(0, lambda: self._handle_lessons_error(str(e)))
+            self.root.after(0, lambda: self._update_connection_status(False, str(e)))
+
+    def _update_lessons_ui(self, lessons: list, from_cache: bool = False):
+        """Update lessons UI on main thread."""
+        self._lessons_list = lessons
+        
+        if not lessons:
+            self.lesson_combo['values'] = ["(Upload lessons via web dashboard)"]
+            self.lesson_combo.current(0)
+            self.lesson_combo.configure(state="disabled")
+            msg = "No lessons found - upload documents via web dashboard"
+            if from_cache:
+                msg += " (cached)"
+            self._log(msg)
+        else:
+            lesson_titles = [f"{l['title']} (ID: {l['id']})" for l in lessons]
+            self.lesson_combo['values'] = lesson_titles
+            self.lesson_combo.configure(state="readonly")
+            msg = f"Loaded {len(lessons)} lesson(s)"
+            if from_cache:
+                msg += " (from cache)"
+            self._log(msg)
+            
+            if self._selected_lesson_id is None and lessons:
+                self.lesson_combo.current(0)
+                self._on_lesson_selected(None)
+
+    def _handle_lessons_error(self, error: str):
+        """Handle lesson loading error on main thread."""
+        self._log(f"Failed to fetch lessons: {error}")
+        self.lesson_combo['values'] = ["(Error loading lessons)"]
+        self.lesson_combo.current(0)
+        self.lesson_combo.configure(state="disabled")
+
 
     # ------------------------------------------------------------------ Mode Selection & Lessons (Phase 16)
 
@@ -343,8 +502,9 @@ class MeetLessonsApp:
         # Show/hide lesson selection based on mode
         if self._current_mode == "lesson":
             self.lesson_select_frame.pack(fill=tk.X, pady=(8, 0))
-            self._refresh_lessons()
-            self._log(f"Switched to Lesson Mode - select a lesson to study")
+            # Phase 16.7: Load lessons asynchronously
+            threading.Thread(target=self._async_refresh_lessons, daemon=True).start()
+            self._log(f"Switched to Lesson Mode - loading lessons...")
         else:
             self.lesson_select_frame.pack_forget()
             self._selected_lesson_id = None
@@ -354,36 +514,14 @@ class MeetLessonsApp:
         self._update_session_info()
 
     def _refresh_lessons(self):
-        """Fetch lessons from backend API."""
+        """Fetch lessons from backend API (manual refresh button)."""
         if not config.is_paired():
             self._log("Not paired - pair device first to load lessons")
             return
         
-        self._log("Fetching lessons from backend...")
-        try:
-            lessons = api_client.fetch_lessons()
-            self._lessons_list = lessons
-            
-            if not lessons:
-                self.lesson_combo['values'] = ["(Upload lessons via web dashboard)"]
-                self.lesson_combo.current(0)
-                self.lesson_combo.configure(state="disabled")
-                self._log("No lessons found - upload documents via web dashboard")
-            else:
-                lesson_titles = [f"{l['title']} (ID: {l['id']})" for l in lessons]
-                self.lesson_combo['values'] = lesson_titles
-                self.lesson_combo.configure(state="readonly")
-                self._log(f"Loaded {len(lessons)} lesson(s)")
-                
-                # Auto-select first lesson if none selected
-                if self._selected_lesson_id is None and lessons:
-                    self.lesson_combo.current(0)
-                    self._on_lesson_selected(None)
-        except Exception as e:
-            self._log(f"Failed to fetch lessons: {e}")
-            self.lesson_combo['values'] = ["(Error loading lessons)"]
-            self.lesson_combo.current(0)
-            self.lesson_combo.configure(state="disabled")
+        self._log("Refreshing lessons from backend...")
+        # Phase 16.7: Use async loading
+        threading.Thread(target=self._fetch_lessons_from_api, daemon=True).start()
 
     def _on_lesson_selected(self, event):
         """Handle lesson selection from dropdown."""
@@ -679,7 +817,12 @@ class MeetLessonsApp:
                         except Exception as e:
                             if self._handle_backend_auth_error(e):
                                 return
-                            self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
+                            # Show clear offline feedback
+                            if not self._is_online:
+                                self.root.after(0, lambda q=q: self._log(f"⚠ Offline - Question not sent: {q[:60]}..."))
+                                self.root.after(0, lambda: self._log("Reconnect to server to capture questions"))
+                            else:
+                                self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
                 else:
                     # Recitation mode: Use session context and session-based grouping
                     from datetime import datetime
@@ -714,7 +857,12 @@ class MeetLessonsApp:
                         except Exception as e:
                             if self._handle_backend_auth_error(e):
                                 return
-                            self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
+                            # Show clear offline feedback
+                            if not self._is_online:
+                                self.root.after(0, lambda q=q: self._log(f"⚠ Offline - Question not sent: {q[:60]}..."))
+                                self.root.after(0, lambda: self._log("Reconnect to server to capture questions"))
+                            else:
+                                self.root.after(0, lambda e=e: self._log(f"Question send error: {e}"))
             except Exception as e:
                 if self._handle_backend_auth_error(e):
                     return

@@ -5,12 +5,45 @@ Handles device pairing, caption submission, and question submission.
 All requests use the X-Device-Token header for authentication.
 """
 
+import time
+from functools import wraps
+
 import requests
 
 import config
 
 
 TIMEOUT = 10  # seconds
+
+
+# Phase 16.7: Retry logic decorator
+def with_retry(max_attempts=3, backoff_base=1.5):
+    """
+    Decorator for API calls with exponential backoff retry.
+    
+    Args:
+        max_attempts: Maximum number of retry attempts (default: 3)
+        backoff_base: Base multiplier for exponential backoff (default: 1.5)
+    
+    Returns:
+        Decorated function that retries on RequestException
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except requests.RequestException as e:
+                    if attempt == max_attempts - 1:
+                        # Last attempt failed, re-raise
+                        raise
+                    # Calculate wait time with exponential backoff
+                    wait_time = backoff_base ** attempt
+                    time.sleep(wait_time)
+            return None
+        return wrapper
+    return decorator
 
 
 class BackendAPIError(RuntimeError):
@@ -130,6 +163,7 @@ def send_question(question: str, context: str = "", meeting_id: str = "",
     return resp.json()
 
 
+@with_retry(max_attempts=3)
 def fetch_lessons() -> list[dict]:
     """
     Fetch list of lessons with source_type='lesson' from backend.
@@ -160,6 +194,7 @@ def check_connection() -> bool:
         return False
 
 
+@with_retry(max_attempts=3)
 def validate_device_token() -> tuple[bool, str]:
     """Return (is_valid, reason). Uses /api/captions/ auth path without creating data."""
     token = config.get("device_token", "")
